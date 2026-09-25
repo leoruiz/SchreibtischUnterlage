@@ -172,7 +172,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             previewWindowController.interactionFailureHandler = { [weak self] error in
                 self?.presentError(
-                    title: "Could not forward the preview click",
+                    title: "Could not enter the virtual display",
                     error: error
                 )
             }
@@ -335,37 +335,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         alert.informativeText = error.localizedDescription
         alert.alertStyle = .critical
 
-        if isRecoverablePermissionError(error) {
+        if case ScreenCaptureCoordinatorError.permissionDenied = error {
             alert.addButton(withTitle: "Open Privacy Settings")
             alert.addButton(withTitle: "OK")
             if alert.runModal() == .alertFirstButtonReturn {
-                openPrivacySettings(for: error)
+                openScreenRecordingSettings()
             }
         } else {
             alert.runModal()
         }
     }
 
-    private func isRecoverablePermissionError(_ error: Error) -> Bool {
-        if case ScreenCaptureCoordinatorError.permissionDenied = error {
-            return true
-        }
-        if case PointerEventForwarderError.permissionDenied = error {
-            return true
-        }
-        return false
-    }
-
-    private func openPrivacySettings(for error: Error) {
-        let pane: String
-        if case PointerEventForwarderError.permissionDenied = error {
-            pane = "Privacy_Accessibility"
-        } else {
-            pane = "Privacy_ScreenCapture"
-        }
-
+    private func openScreenRecordingSettings() {
         guard let url = URL(
-            string: "x-apple.systempreferences:com.apple.preference.security?\(pane)"
+            string: """
+            x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture
+            """
         ) else {
             return
         }

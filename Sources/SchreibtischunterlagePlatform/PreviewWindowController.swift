@@ -21,7 +21,7 @@ public final class PreviewWindowController:
 
     private let previewView: MetalPreviewView
     private var captureCoordinator: ScreenCaptureCoordinator?
-    private var pointerEventForwarder: PointerEventForwarder?
+    private var cursorPortal: CursorPortal?
     private var isClosingProgrammatically = false
     private var lastFrameSize: CGSize?
     private var hasAppliedInitialWindowSize = false
@@ -59,10 +59,10 @@ public final class PreviewWindowController:
     }
 
     public func start(displayID: CGDirectDisplayID) async throws {
-        let pointerEventForwarder = PointerEventForwarder(displayID: displayID)
-        self.pointerEventForwarder = pointerEventForwarder
-        previewView.clickHandler = { [weak self] click in
-            self?.forward(click)
+        let cursorPortal = CursorPortal(displayID: displayID)
+        self.cursorPortal = cursorPortal
+        previewView.cursorPortalHandler = { [weak self] location in
+            self?.moveCursor(to: location)
         }
 
         let coordinator = ScreenCaptureCoordinator(
@@ -95,8 +95,8 @@ public final class PreviewWindowController:
 
         let captureCoordinator = captureCoordinator
         self.captureCoordinator = nil
-        pointerEventForwarder = nil
-        previewView.clickHandler = nil
+        cursorPortal = nil
+        previewView.cursorPortalHandler = nil
         if let captureCoordinator {
             try await captureCoordinator.stop()
         }
@@ -106,8 +106,8 @@ public final class PreviewWindowController:
         isClosingProgrammatically = true
         captureCoordinator?.invalidate()
         captureCoordinator = nil
-        pointerEventForwarder = nil
-        previewView.clickHandler = nil
+        cursorPortal = nil
+        previewView.cursorPortalHandler = nil
         window?.orderOut(nil)
         isClosingProgrammatically = false
     }
@@ -128,27 +128,22 @@ public final class PreviewWindowController:
         }
     }
 
-    private func forward(_ click: PreviewPointerClick) {
+    private func moveCursor(to previewPoint: CGPoint) {
         guard
-            let pointerEventForwarder,
+            let cursorPortal,
             let sourceSize = lastFrameSize
         else {
             return
         }
 
-        let previewSize = previewView.bounds.size
-        Task { @MainActor [weak self] in
-            await Task.yield()
-
-            do {
-                try await pointerEventForwarder.forward(
-                    click,
-                    previewSize: previewSize,
-                    sourceSize: sourceSize
-                )
-            } catch {
-                self?.interactionFailureHandler?(error)
-            }
+        do {
+            try cursorPortal.moveCursor(
+                from: previewPoint,
+                previewSize: previewView.bounds.size,
+                sourceSize: sourceSize
+            )
+        } catch {
+            interactionFailureHandler?(error)
         }
     }
 

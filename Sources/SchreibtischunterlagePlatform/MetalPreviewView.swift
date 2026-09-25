@@ -39,7 +39,7 @@ private final class RetainedMetalTexture: @unchecked Sendable {
 
 @MainActor
 public final class MetalPreviewView: NSView {
-    public var clickHandler: (@MainActor @Sendable (PreviewPointerClick) -> Void)?
+    public var cursorPortalHandler: (@MainActor @Sendable (CGPoint) -> Void)?
 
     private static let shaderSource = """
     #include <metal_stdlib>
@@ -82,10 +82,7 @@ public final class MetalPreviewView: NSView {
     private let pipelineState: MTLRenderPipelineState
     private let samplerState: MTLSamplerState
     private let textureCache: CVMetalTextureCache
-    private var pendingClick: (
-        button: PreviewPointerButton,
-        location: CGPoint
-    )?
+    private var pendingClickLocation: CGPoint?
 
     public static func make() throws -> MetalPreviewView {
         guard let device = MTLCreateSystemDefaultDevice() else {
@@ -182,44 +179,19 @@ public final class MetalPreviewView: NSView {
     }
 
     public override func mouseDown(with event: NSEvent) {
-        beginClick(event, button: .left)
+        pendingClickLocation = convert(event.locationInWindow, from: nil)
     }
 
     public override func mouseUp(with event: NSEvent) {
-        completeClick(event, button: .left)
+        guard pendingClickLocation != nil else {
+            return
+        }
+
+        pendingClickLocation = nil
+        cursorPortalHandler?(convert(event.locationInWindow, from: nil))
     }
 
     public override func mouseDragged(with event: NSEvent) {
-        cancelClickIfDragged(event)
-    }
-
-    public override func rightMouseDown(with event: NSEvent) {
-        beginClick(event, button: .right)
-    }
-
-    public override func rightMouseUp(with event: NSEvent) {
-        completeClick(event, button: .right)
-    }
-
-    public override func rightMouseDragged(with event: NSEvent) {
-        cancelClickIfDragged(event)
-    }
-
-    public override func otherMouseDown(with event: NSEvent) {
-        guard event.buttonNumber == 2 else {
-            return
-        }
-        beginClick(event, button: .center)
-    }
-
-    public override func otherMouseUp(with event: NSEvent) {
-        guard event.buttonNumber == 2 else {
-            return
-        }
-        completeClick(event, button: .center)
-    }
-
-    public override func otherMouseDragged(with event: NSEvent) {
         cancelClickIfDragged(event)
     }
 
@@ -298,55 +270,18 @@ public final class MetalPreviewView: NSView {
         layer as! CAMetalLayer
     }
 
-    private func forwardClick(
-        _ event: NSEvent,
-        button: PreviewPointerButton
-    ) {
-        clickHandler?(
-            PreviewPointerClick(
-                locationInView: convert(event.locationInWindow, from: nil),
-                button: button,
-                clickCount: event.clickCount,
-                modifierFlags: event.modifierFlags
-            )
-        )
-    }
-
-    private func beginClick(
-        _ event: NSEvent,
-        button: PreviewPointerButton
-    ) {
-        pendingClick = (
-            button: button,
-            location: convert(event.locationInWindow, from: nil)
-        )
-    }
-
-    private func completeClick(
-        _ event: NSEvent,
-        button: PreviewPointerButton
-    ) {
-        guard pendingClick?.button == button else {
-            pendingClick = nil
-            return
-        }
-
-        pendingClick = nil
-        forwardClick(event, button: button)
-    }
-
     private func cancelClickIfDragged(_ event: NSEvent) {
-        guard let pendingClick else {
+        guard let pendingClickLocation else {
             return
         }
 
         let currentLocation = convert(event.locationInWindow, from: nil)
         let distance = hypot(
-            currentLocation.x - pendingClick.location.x,
-            currentLocation.y - pendingClick.location.y
+            currentLocation.x - pendingClickLocation.x,
+            currentLocation.y - pendingClickLocation.y
         )
         if distance > 4 {
-            self.pendingClick = nil
+            self.pendingClickLocation = nil
         }
     }
 

@@ -14,18 +14,17 @@ final class PreviewProbe: NSObject, NSApplicationDelegate {
     private(set) var exitCode = EXIT_FAILURE
 
     private let visibleDuration: Duration
-    private let testsPointerForwarding: Bool
+    private let testsCursorPortal: Bool
     private var controller: DisplaySessionController?
     private var previewWindowController: PreviewWindowController?
-    private var pointerTarget: PointerProbeTarget?
     private var captureFailure: Error?
 
     init(
         visibleDuration: Duration,
-        testsPointerForwarding: Bool = false
+        testsCursorPortal: Bool = false
     ) {
         self.visibleDuration = visibleDuration
-        self.testsPointerForwarding = testsPointerForwarding
+        self.testsCursorPortal = testsCursorPortal
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -36,15 +35,23 @@ final class PreviewProbe: NSObject, NSApplicationDelegate {
             } catch {
                 fputs("preview probe failed: \(error)\n", stderr)
             }
-            NSApplication.shared.terminate(nil)
+            await cleanup()
+            exit(exitCode)
         }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
         previewWindowController?.invalidate()
         previewWindowController = nil
-        pointerTarget?.close()
-        pointerTarget = nil
+        controller?.stopIfNeeded()
+        controller = nil
+    }
+
+    private func cleanup() async {
+        if let previewWindowController {
+            try? await previewWindowController.stop()
+        }
+        self.previewWindowController = nil
         controller?.stopIfNeeded()
         controller = nil
     }
@@ -78,12 +85,6 @@ final class PreviewProbe: NSObject, NSApplicationDelegate {
                 + "@\(activeMode.refreshRate)"
         )
 
-        if testsPointerForwarding {
-            let pointerTarget = try PointerProbeTarget(displayID: displayID)
-            pointerTarget.show()
-            self.pointerTarget = pointerTarget
-        }
-
         let previewWindowController = try PreviewWindowController.make()
         previewWindowController.failureHandler = { [weak self] error in
             self?.captureFailure = error
@@ -95,13 +96,12 @@ final class PreviewProbe: NSObject, NSApplicationDelegate {
         print("screen capture frame delivery: PASS")
         print("metal frame submission: PASS")
 
-        if let pointerTarget {
-            try await verifyPointerForwarding(
+        if testsCursorPortal {
+            try verifyCursorPortal(
                 displayID: displayID,
-                previewWindowController: previewWindowController,
-                target: pointerTarget
+                previewWindowController: previewWindowController
             )
-            print("preview click forwarding: PASS")
+            print("preview cursor portal: PASS")
         }
 
         try await Task.sleep(for: visibleDuration)
@@ -111,8 +111,6 @@ final class PreviewProbe: NSObject, NSApplicationDelegate {
 
         try await previewWindowController.stop()
         self.previewWindowController = nil
-        pointerTarget?.close()
-        pointerTarget = nil
         try controller.stop()
         try await DisplayProbe.waitForDisplayRemoval(displayID: displayID)
         try DisplayProbe.verifyPhysicalDisplays(
@@ -125,11 +123,10 @@ final class PreviewProbe: NSObject, NSApplicationDelegate {
         print("virtual display teardown: PASS")
     }
 
-    private func verifyPointerForwarding(
+    private func verifyCursorPortal(
         displayID: CGDirectDisplayID,
-        previewWindowController: PreviewWindowController,
-        target: PointerProbeTarget
-    ) async throws {
+        previewWindowController: PreviewWindowController
+    ) throws {
         guard let sourceSize = previewWindowController.currentSourceSize else {
             throw PreviewProbeFailure(
                 description: "Preview has no source size for pointer mapping"
@@ -149,40 +146,43 @@ final class PreviewProbe: NSObject, NSApplicationDelegate {
         )
         print(
             "pointer geometry: display=\(displayBounds) "
-                + "screen=\(target.screenFrame) target=\(target.windowFrame) "
                 + "preview=\(previewSize) source=\(sourceSize) "
                 + "mapped=\(String(describing: mappedPoint))"
         )
 
-        let click = PreviewPointerClick(
-            locationInView: CGPoint(
+        guard let mappedPoint else {
+            throw PreviewProbeFailure(
+                description: "Preview center did not map to the virtual display"
+            )
+        }
+        try CursorPortal(displayID: displayID).moveCursor(
+            from: CGPoint(
                 x: previewSize.width / 2,
                 y: previewSize.height / 2
             ),
-            button: .left,
-            clickCount: 1,
-            modifierFlags: []
-        )
-        try await PointerEventForwarder(displayID: displayID).forward(
-            click,
             previewSize: previewSize,
             sourceSize: sourceSize
         )
-        print(
-            "pointer location after forwarding: "
-                + "\(String(describing: CGEvent(source: nil)?.location))"
+        let expectedPoint = CGPoint(
+            x: displayBounds.minX + mappedPoint.x,
+            y: displayBounds.minY + mappedPoint.y
         )
-
-        for _ in 0..<100 {
-            if target.clickCount > 0 {
-                return
-            }
-            try await Task.sleep(for: .milliseconds(100))
+        guard let actualPoint = CGEvent(source: nil)?.location else {
+            throw PreviewProbeFailure(
+                description: "Could not read the global cursor location"
+            )
         }
-
-        throw PreviewProbeFailure(
-            description: "Forwarded click did not reach the virtual display target"
-        )
+        print("pointer location after portal: \(actualPoint)")
+        guard
+            abs(actualPoint.x - expectedPoint.x) <= 1,
+            abs(actualPoint.y - expectedPoint.y) <= 1
+        else {
+            throw PreviewProbeFailure(
+                description: """
+                Cursor reached \(actualPoint) instead of expected \(expectedPoint)
+                """
+            )
+        }
     }
 
     private func waitForRenderedFrame(
@@ -201,78 +201,5 @@ final class PreviewProbe: NSObject, NSApplicationDelegate {
         throw PreviewProbeFailure(
             description: "No capture frame reached Metal within 10 seconds"
         )
-    }
-}
-
-@MainActor
-private final class PointerProbeTarget: NSObject {
-    private(set) var clickCount = 0
-    let screenFrame: CGRect
-
-    private let window: NSWindow
-    private let intendedFrame: CGRect
-    var windowFrame: CGRect {
-        window.frame
-    }
-
-    init(displayID: CGDirectDisplayID) throws {
-        guard let screen = NSScreen.screens.first(
-            where: { screen in
-                let key = NSDeviceDescriptionKey("NSScreenNumber")
-                return (screen.deviceDescription[key] as? NSNumber)?.uint32Value
-                    == displayID
-            }
-        ) else {
-            throw PreviewProbeFailure(
-                description: "Virtual display has no matching NSScreen"
-            )
-        }
-        screenFrame = screen.frame
-
-        let contentSize = CGSize(width: 600, height: 400)
-        let contentRect = CGRect(
-            x: screen.frame.midX - contentSize.width / 2,
-            y: screen.frame.midY - contentSize.height / 2,
-            width: contentSize.width,
-            height: contentSize.height
-        )
-        let window = NSWindow(
-            contentRect: contentRect,
-            styleMask: [.titled],
-            backing: .buffered,
-            defer: false,
-            screen: screen
-        )
-        self.window = window
-        intendedFrame = window.frameRect(forContentRect: contentRect)
-
-        super.init()
-
-        let button = NSButton(
-            title: "Pointer forwarding target",
-            target: self,
-            action: #selector(didClick)
-        )
-        button.bezelStyle = .regularSquare
-        button.frame = CGRect(origin: .zero, size: contentSize)
-        button.autoresizingMask = [.width, .height]
-
-        window.title = "Pointer Probe Target"
-        window.contentView = button
-        window.isReleasedWhenClosed = false
-    }
-
-    func show() {
-        window.setFrame(intendedFrame, display: true)
-        window.orderFrontRegardless()
-    }
-
-    func close() {
-        window.orderOut(nil)
-    }
-
-    @objc
-    private func didClick() {
-        clickCount += 1
     }
 }

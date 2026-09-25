@@ -16,10 +16,10 @@ enum ApplicationMain {
             exit(probe.exitCode)
         }
 
-        if let pointerProbeDuration = pointerProbeDuration() {
+        if let cursorProbeDuration = cursorProbeDuration() {
             let probe = PreviewProbe(
-                visibleDuration: pointerProbeDuration,
-                testsPointerForwarding: true
+                visibleDuration: cursorProbeDuration,
+                testsCursorPortal: true
             )
             application.setActivationPolicy(.accessory)
             application.delegate = probe
@@ -78,10 +78,10 @@ enum ApplicationMain {
         )
     }
 
-    private static func pointerProbeDuration() -> Duration? {
+    private static func cursorProbeDuration() -> Duration? {
         probeDuration(
-            prefix: "--pointer-probe-seconds=",
-            errorLabel: "pointer probe"
+            prefix: "--cursor-probe-seconds=",
+            errorLabel: "cursor probe"
         )
     }
 

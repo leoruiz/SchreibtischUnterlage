@@ -17,6 +17,7 @@ creating or changing any displays.
 - Swift and AppKit
 - ScreenCaptureKit and one purpose-built Metal renderer
 - Explicit Start and Stop actions
+- A curated resolution catalog exposed through macOS Display Settings
 - No automatic virtual display creation at launch
 - No third-party runtime dependencies
 
@@ -35,6 +36,24 @@ The application bundle is written to:
 ```text
 .build/Schreibtischunterlage.app
 ```
+
+The manual display probe is intentionally excluded from `make test` because it
+changes the live macOS display configuration. Run it only during attended
+hardware validation:
+
+```sh
+.build/Schreibtischunterlage.app/Contents/MacOS/Schreibtischunterlage \
+  --display-probe
+```
+
+It creates a virtual display for three seconds, releases it, then verifies that
+the baseline displays are unchanged and the virtual display is no longer
+online.
+
+The initial resolution catalog includes common 16:9, 16:10, and ultrawide
+modes from 1280 × 720 through 5120 × 1440. The complete catalog is advertised
+to macOS, so resolution changes happen through Display Settings just like a
+physical monitor. The known-good 2560 × 1600 mode is advertised first.
 
 ## Attribution
 

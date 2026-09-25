@@ -12,6 +12,8 @@ enum DisplaySessionStateMachineTests {
         try stopFailureRemainsVisible()
         try invalidTransitionDoesNotChangeState()
         try PhysicalDisplayGuardTests.run()
+        try DisplaySessionControllerTests.run()
+        try VirtualDisplayModeTests.run()
 
         print("SchreibtischunterlageCoreTests: PASS")
     }

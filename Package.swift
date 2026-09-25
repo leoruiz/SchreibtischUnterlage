@@ -15,14 +15,39 @@ let package = Package(
     ],
     targets: [
         .target(
+            name: "CGVirtualDisplayBridge",
+            path: "Sources/CGVirtualDisplayBridge",
+            publicHeadersPath: "include",
+            cSettings: [
+                .unsafeFlags(["-fobjc-arc"]),
+            ],
+            linkerSettings: [
+                .linkedFramework("Cocoa"),
+                .linkedFramework("CoreGraphics"),
+            ]
+        ),
+        .target(
             name: "SchreibtischunterlageCore",
+            linkerSettings: [
+                .linkedFramework("CoreGraphics"),
+            ]
+        ),
+        .target(
+            name: "SchreibtischunterlagePlatform",
+            dependencies: [
+                "CGVirtualDisplayBridge",
+                "SchreibtischunterlageCore",
+            ],
             linkerSettings: [
                 .linkedFramework("CoreGraphics"),
             ]
         ),
         .executableTarget(
             name: "Schreibtischunterlage",
-            dependencies: ["SchreibtischunterlageCore"],
+            dependencies: [
+                "SchreibtischunterlageCore",
+                "SchreibtischunterlagePlatform",
+            ],
             linkerSettings: [
                 .linkedFramework("AppKit"),
             ]

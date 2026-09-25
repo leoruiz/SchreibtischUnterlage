@@ -93,4 +93,3 @@ private struct PreviewCoordinateMapperTestFailure:
 {
     let description: String
 }
-

@@ -41,8 +41,10 @@ public final class ScreenCaptureCoordinator:
     private let latencyTracker: PreviewLatencyTracker?
     private let stateLock = NSLock()
 
+    @MainActor
     private var stream: SCStream?
     private var isStopping = false
+    @MainActor
     private var configuredPixelSize: CGSize?
 
     public convenience init(
@@ -67,6 +69,7 @@ public final class ScreenCaptureCoordinator:
         super.init()
     }
 
+    @MainActor
     public func start(displayID: CGDirectDisplayID) async throws {
         guard stream == nil else {
             return
@@ -106,6 +109,7 @@ public final class ScreenCaptureCoordinator:
         }
     }
 
+    @MainActor
     public func stop() async throws {
         guard let stream else {
             return
@@ -134,6 +138,7 @@ public final class ScreenCaptureCoordinator:
     }
 
     @discardableResult
+    @MainActor
     public func updateConfiguration(
         displayID: CGDirectDisplayID
     ) async throws -> Bool {
@@ -154,6 +159,7 @@ public final class ScreenCaptureCoordinator:
         return true
     }
 
+    @MainActor
     public func invalidate() {
         stateLock.withLock {
             isStopping = true
@@ -167,7 +173,9 @@ public final class ScreenCaptureCoordinator:
         didOutputSampleBuffer sampleBuffer: CMSampleBuffer,
         of outputType: SCStreamOutputType
     ) {
-        let captureCallbackTime = HostTimeClock.now
+        let captureCallbackTime = latencyTracker == nil
+            ? 0
+            : HostTimeClock.now
         guard
             outputType == .screen,
             sampleBuffer.isValid,
@@ -181,7 +189,9 @@ public final class ScreenCaptureCoordinator:
 
         let frame = CapturedFrame(
             pixelBuffer: pixelBuffer,
-            sourceDisplayTime: sourceDisplayTime(attachments),
+            sourceDisplayTime: latencyTracker == nil
+                ? nil
+                : sourceDisplayTime(attachments),
             captureCallbackTime: captureCallbackTime,
             latencyGeneration: latencyTracker?.measurementGeneration
         )

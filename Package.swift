@@ -58,7 +58,7 @@ let package = Package(
                 .linkedFramework("AppKit"),
             ]
         ),
-        .executableTarget(
+        .testTarget(
             name: "SchreibtischunterlageCoreTests",
             dependencies: ["SchreibtischunterlageCore"],
             path: "Tests/SchreibtischunterlageCoreTests"

@@ -233,10 +233,12 @@ public final class PreviewWindowController:
     }
 
     private func display(_ frame: CapturedFrame) {
-        latencyTracker?.recordDeliveredFrame(
-            frame,
-            at: HostTimeClock.now
-        )
+        if let latencyTracker {
+            latencyTracker.recordDeliveredFrame(
+                frame,
+                at: HostTimeClock.now
+            )
+        }
         updateWindowAspectRatioIfNeeded(
             CGSize(width: frame.width, height: frame.height)
         )

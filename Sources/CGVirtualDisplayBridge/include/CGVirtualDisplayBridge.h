@@ -47,4 +47,3 @@ typedef NS_ERROR_ENUM(STUVirtualDisplayErrorDomain, STUVirtualDisplayErrorCode) 
 @end
 
 NS_ASSUME_NONNULL_END
-

@@ -35,4 +35,3 @@ public struct AspectFitViewport: Equatable, Sendable {
         }
     }
 }
-

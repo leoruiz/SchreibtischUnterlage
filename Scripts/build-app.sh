@@ -11,7 +11,8 @@ executable_directory="$contents_directory/MacOS"
 swift build \
     --package-path "$root_directory" \
     --configuration "$configuration" \
-    --arch arm64
+    --arch arm64 \
+    --product Schreibtischunterlage
 
 binary_directory=$(
     swift build \
@@ -33,4 +34,3 @@ codesign \
     "$app_directory"
 
 echo "$app_directory"
-

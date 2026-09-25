@@ -50,4 +50,3 @@ public enum PreviewCoordinateMapper {
         min(max(value, 0), max(extent - 0.5, 0))
     }
 }
-

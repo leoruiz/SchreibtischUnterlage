@@ -302,25 +302,31 @@ public final class MetalPreviewView: NSView {
         encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
         encoder.endEncoding()
 
-        let submissionTime = HostTimeClock.now
-        latencyTracker?.recordSubmittedFrame(
-            frame,
-            at: submissionTime
-        )
-        drawable.addPresentedHandler { [latencyTracker] drawable in
-            latencyTracker?.recordPresentation(
-                frame: frame,
-                submissionTime: submissionTime,
-                presentationTime: drawable.presentedTime
+        if let latencyTracker {
+            let submissionTime = HostTimeClock.now
+            latencyTracker.recordSubmittedFrame(
+                frame,
+                at: submissionTime
             )
-        }
-        commandBuffer.addCompletedHandler { [latencyTracker] commandBuffer in
-            latencyTracker?.recordGPUExecution(
-                frame: frame,
-                startTime: commandBuffer.gpuStartTime,
-                endTime: commandBuffer.gpuEndTime
-            )
-            withExtendedLifetime(texture) {}
+            drawable.addPresentedHandler { drawable in
+                latencyTracker.recordPresentation(
+                    frame: frame,
+                    submissionTime: submissionTime,
+                    presentationTime: drawable.presentedTime
+                )
+            }
+            commandBuffer.addCompletedHandler { commandBuffer in
+                latencyTracker.recordGPUExecution(
+                    frame: frame,
+                    startTime: commandBuffer.gpuStartTime,
+                    endTime: commandBuffer.gpuEndTime
+                )
+                withExtendedLifetime(texture) {}
+            }
+        } else {
+            commandBuffer.addCompletedHandler { _ in
+                withExtendedLifetime(texture) {}
+            }
         }
         commandBuffer.present(drawable)
         commandBuffer.commit()

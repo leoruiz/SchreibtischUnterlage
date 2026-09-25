@@ -11,6 +11,7 @@ enum DisplaySessionStateMachineTests {
         try startFailureCanBeCleanedUp()
         try stopFailureRemainsVisible()
         try invalidTransitionDoesNotChangeState()
+        try PhysicalDisplayGuardTests.run()
 
         print("SchreibtischunterlageCoreTests: PASS")
     }

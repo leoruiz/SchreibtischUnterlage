@@ -15,7 +15,10 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "SchreibtischunterlageCore"
+            name: "SchreibtischunterlageCore",
+            linkerSettings: [
+                .linkedFramework("CoreGraphics"),
+            ]
         ),
         .executableTarget(
             name: "Schreibtischunterlage",

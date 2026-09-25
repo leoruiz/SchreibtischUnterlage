@@ -39,6 +39,8 @@ private final class RetainedMetalTexture: @unchecked Sendable {
 
 @MainActor
 public final class MetalPreviewView: NSView {
+    public var clickHandler: (@MainActor @Sendable (PreviewPointerClick) -> Void)?
+
     private static let shaderSource = """
     #include <metal_stdlib>
     using namespace metal;
@@ -80,6 +82,10 @@ public final class MetalPreviewView: NSView {
     private let pipelineState: MTLRenderPipelineState
     private let samplerState: MTLSamplerState
     private let textureCache: CVMetalTextureCache
+    private var pendingClick: (
+        button: PreviewPointerButton,
+        location: CGPoint
+    )?
 
     public static func make() throws -> MetalPreviewView {
         guard let device = MTLCreateSystemDefaultDevice() else {
@@ -171,6 +177,52 @@ public final class MetalPreviewView: NSView {
         updateDrawableSize()
     }
 
+    public override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
+    }
+
+    public override func mouseDown(with event: NSEvent) {
+        beginClick(event, button: .left)
+    }
+
+    public override func mouseUp(with event: NSEvent) {
+        completeClick(event, button: .left)
+    }
+
+    public override func mouseDragged(with event: NSEvent) {
+        cancelClickIfDragged(event)
+    }
+
+    public override func rightMouseDown(with event: NSEvent) {
+        beginClick(event, button: .right)
+    }
+
+    public override func rightMouseUp(with event: NSEvent) {
+        completeClick(event, button: .right)
+    }
+
+    public override func rightMouseDragged(with event: NSEvent) {
+        cancelClickIfDragged(event)
+    }
+
+    public override func otherMouseDown(with event: NSEvent) {
+        guard event.buttonNumber == 2 else {
+            return
+        }
+        beginClick(event, button: .center)
+    }
+
+    public override func otherMouseUp(with event: NSEvent) {
+        guard event.buttonNumber == 2 else {
+            return
+        }
+        completeClick(event, button: .center)
+    }
+
+    public override func otherMouseDragged(with event: NSEvent) {
+        cancelClickIfDragged(event)
+    }
+
     @discardableResult
     public func display(_ frame: CapturedFrame) -> Bool {
         updateDrawableSize()
@@ -244,6 +296,58 @@ public final class MetalPreviewView: NSView {
 
     private var metalLayer: CAMetalLayer {
         layer as! CAMetalLayer
+    }
+
+    private func forwardClick(
+        _ event: NSEvent,
+        button: PreviewPointerButton
+    ) {
+        clickHandler?(
+            PreviewPointerClick(
+                locationInView: convert(event.locationInWindow, from: nil),
+                button: button,
+                clickCount: event.clickCount,
+                modifierFlags: event.modifierFlags
+            )
+        )
+    }
+
+    private func beginClick(
+        _ event: NSEvent,
+        button: PreviewPointerButton
+    ) {
+        pendingClick = (
+            button: button,
+            location: convert(event.locationInWindow, from: nil)
+        )
+    }
+
+    private func completeClick(
+        _ event: NSEvent,
+        button: PreviewPointerButton
+    ) {
+        guard pendingClick?.button == button else {
+            pendingClick = nil
+            return
+        }
+
+        pendingClick = nil
+        forwardClick(event, button: button)
+    }
+
+    private func cancelClickIfDragged(_ event: NSEvent) {
+        guard let pendingClick else {
+            return
+        }
+
+        let currentLocation = convert(event.locationInWindow, from: nil)
+        let distance = hypot(
+            currentLocation.x - pendingClick.location.x,
+            currentLocation.y - pendingClick.location.y
+        )
+        if distance > 4 {
+            self.pendingClick = nil
+        }
     }
 
     private func updateDrawableSize() {

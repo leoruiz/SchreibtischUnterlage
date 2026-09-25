@@ -1,5 +1,6 @@
 @preconcurrency import AppKit
 import CoreGraphics
+import SchreibtischunterlageCore
 
 @MainActor
 public final class PreviewWindowController:
@@ -8,12 +9,22 @@ public final class PreviewWindowController:
 {
     public var closeHandler: (@MainActor @Sendable () -> Void)?
     public var failureHandler: (@MainActor @Sendable (Error) -> Void)?
+    public var interactionFailureHandler: (@MainActor @Sendable (Error) -> Void)?
     public private(set) var renderedFrameCount = 0
+    public var previewContentSize: CGSize {
+        previewView.bounds.size
+    }
+
+    public var currentSourceSize: CGSize? {
+        lastFrameSize
+    }
 
     private let previewView: MetalPreviewView
     private var captureCoordinator: ScreenCaptureCoordinator?
+    private var pointerEventForwarder: PointerEventForwarder?
     private var isClosingProgrammatically = false
     private var lastFrameSize: CGSize?
+    private var hasAppliedInitialWindowSize = false
 
     public static func make() throws -> PreviewWindowController {
         PreviewWindowController(previewView: try MetalPreviewView.make())
@@ -48,6 +59,12 @@ public final class PreviewWindowController:
     }
 
     public func start(displayID: CGDirectDisplayID) async throws {
+        let pointerEventForwarder = PointerEventForwarder(displayID: displayID)
+        self.pointerEventForwarder = pointerEventForwarder
+        previewView.clickHandler = { [weak self] click in
+            self?.forward(click)
+        }
+
         let coordinator = ScreenCaptureCoordinator(
             frameHandler: { [weak self] frame in
                 self?.display(frame)
@@ -78,6 +95,8 @@ public final class PreviewWindowController:
 
         let captureCoordinator = captureCoordinator
         self.captureCoordinator = nil
+        pointerEventForwarder = nil
+        previewView.clickHandler = nil
         if let captureCoordinator {
             try await captureCoordinator.stop()
         }
@@ -87,6 +106,8 @@ public final class PreviewWindowController:
         isClosingProgrammatically = true
         captureCoordinator?.invalidate()
         captureCoordinator = nil
+        pointerEventForwarder = nil
+        previewView.clickHandler = nil
         window?.orderOut(nil)
         isClosingProgrammatically = false
     }
@@ -107,6 +128,30 @@ public final class PreviewWindowController:
         }
     }
 
+    private func forward(_ click: PreviewPointerClick) {
+        guard
+            let pointerEventForwarder,
+            let sourceSize = lastFrameSize
+        else {
+            return
+        }
+
+        let previewSize = previewView.bounds.size
+        Task { @MainActor [weak self] in
+            await Task.yield()
+
+            do {
+                try await pointerEventForwarder.forward(
+                    click,
+                    previewSize: previewSize,
+                    sourceSize: sourceSize
+                )
+            } catch {
+                self?.interactionFailureHandler?(error)
+            }
+        }
+    }
+
     private func updateWindowAspectRatioIfNeeded(_ frameSize: CGSize) {
         guard frameSize != lastFrameSize else {
             return
@@ -116,6 +161,35 @@ public final class PreviewWindowController:
         window?.contentAspectRatio = CGSize(
             width: frameSize.width / frameSize.height,
             height: 1
+        )
+
+        guard !hasAppliedInitialWindowSize else {
+            return
+        }
+        hasAppliedInitialWindowSize = true
+        applyInitialWindowSize(sourceSize: frameSize)
+    }
+
+    private func applyInitialWindowSize(sourceSize: CGSize) {
+        guard
+            let window,
+            let screen = window.screen ?? NSScreen.main,
+            let contentSize = PreviewWindowSizing.initialContentSize(
+                sourceSize: sourceSize,
+                availableSize: screen.visibleFrame.size
+            )
+        else {
+            return
+        }
+
+        window.setContentSize(contentSize)
+        let frame = window.frame
+        let visibleFrame = screen.visibleFrame
+        window.setFrameOrigin(
+            CGPoint(
+                x: visibleFrame.midX - frame.width / 2,
+                y: visibleFrame.midY - frame.height / 2
+            )
         )
     }
 }

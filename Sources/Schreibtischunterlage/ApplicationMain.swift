@@ -16,6 +16,18 @@ enum ApplicationMain {
             exit(probe.exitCode)
         }
 
+        if let pointerProbeDuration = pointerProbeDuration() {
+            let probe = PreviewProbe(
+                visibleDuration: pointerProbeDuration,
+                testsPointerForwarding: true
+            )
+            application.setActivationPolicy(.accessory)
+            application.delegate = probe
+            application.run()
+            withExtendedLifetime(probe) {}
+            exit(probe.exitCode)
+        }
+
         if let previewProbeDuration = previewProbeDuration() {
             let probe = PreviewProbe(visibleDuration: previewProbeDuration)
             application.setActivationPolicy(.accessory)
@@ -60,7 +72,23 @@ enum ApplicationMain {
     }
 
     private static func previewProbeDuration() -> Duration? {
-        let prefix = "--preview-probe-seconds="
+        probeDuration(
+            prefix: "--preview-probe-seconds=",
+            errorLabel: "preview probe"
+        )
+    }
+
+    private static func pointerProbeDuration() -> Duration? {
+        probeDuration(
+            prefix: "--pointer-probe-seconds=",
+            errorLabel: "pointer probe"
+        )
+    }
+
+    private static func probeDuration(
+        prefix: String,
+        errorLabel: String
+    ) -> Duration? {
         guard let argument = CommandLine.arguments.dropFirst().first(
             where: { $0.hasPrefix(prefix) }
         ) else {
@@ -72,7 +100,7 @@ enum ApplicationMain {
             let seconds = Int(rawValue),
             (3...60).contains(seconds)
         else {
-            fputs("preview probe duration must be between 3 and 60 seconds\n", stderr)
+            fputs("\(errorLabel) duration must be between 3 and 60 seconds\n", stderr)
             exit(EXIT_FAILURE)
         }
 

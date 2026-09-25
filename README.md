@@ -71,6 +71,17 @@ display, waits until a complete capture frame is submitted to Metal, leaves the
 preview visible for the requested duration, then stops capture and verifies
 display cleanup.
 
+To validate click forwarding with a real target on the virtual display:
+
+```sh
+.build/Schreibtischunterlage.app/Contents/MacOS/Schreibtischunterlage \
+  --pointer-probe-seconds=10
+```
+
+This probe additionally requires Accessibility permission. It places a large
+button at the center of the virtual display, forwards the corresponding preview
+click, and fails unless the button receives the synthetic mouse event.
+
 The app refuses to create a second managed display if its vendor, product, and
 serial identity is already online.
 
@@ -86,6 +97,14 @@ physical monitor. The known-good 2560 × 1600 mode is advertised first.
 The preview consumes complete ScreenCaptureKit frames only, keeps the newest
 pending frame when capture outruns the UI, and renders IOSurface-backed pixel
 buffers directly through Metal with aspect-fit scaling.
+
+Clicking visible preview content moves the macOS cursor to the corresponding
+point on the virtual display and forwards the click. After entering the virtual
+display, normal macOS mouse movement, dragging, scrolling, and keyboard input
+operate there directly. Forwarding the first click requires Accessibility
+permission; clicks in letterboxed preview margins are ignored. The initial
+preview size adapts to the available physical screen, up to 1800 × 1125, while
+preserving the active virtual-display aspect ratio.
 
 ## Attribution
 

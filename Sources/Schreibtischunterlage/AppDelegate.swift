@@ -170,6 +170,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             previewWindowController.failureHandler = { [weak self] error in
                 self?.handleCaptureFailure(error)
             }
+            previewWindowController.interactionFailureHandler = { [weak self] error in
+                self?.presentError(
+                    title: "Could not forward the preview click",
+                    error: error
+                )
+            }
             self.previewWindowController = previewWindowController
 
             try await previewWindowController.start(displayID: displayID)
@@ -329,22 +335,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         alert.informativeText = error.localizedDescription
         alert.alertStyle = .critical
 
-        if case ScreenCaptureCoordinatorError.permissionDenied = error {
+        if isRecoverablePermissionError(error) {
             alert.addButton(withTitle: "Open Privacy Settings")
             alert.addButton(withTitle: "OK")
             if alert.runModal() == .alertFirstButtonReturn {
-                openScreenRecordingSettings()
+                openPrivacySettings(for: error)
             }
         } else {
             alert.runModal()
         }
     }
 
-    private func openScreenRecordingSettings() {
+    private func isRecoverablePermissionError(_ error: Error) -> Bool {
+        if case ScreenCaptureCoordinatorError.permissionDenied = error {
+            return true
+        }
+        if case PointerEventForwarderError.permissionDenied = error {
+            return true
+        }
+        return false
+    }
+
+    private func openPrivacySettings(for error: Error) {
+        let pane: String
+        if case PointerEventForwarderError.permissionDenied = error {
+            pane = "Privacy_Accessibility"
+        } else {
+            pane = "Privacy_ScreenCapture"
+        }
+
         guard let url = URL(
-            string: """
-            x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture
-            """
+            string: "x-apple.systempreferences:com.apple.preference.security?\(pane)"
         ) else {
             return
         }

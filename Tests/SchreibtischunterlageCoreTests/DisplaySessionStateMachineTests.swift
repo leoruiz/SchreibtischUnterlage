@@ -15,6 +15,8 @@ enum DisplaySessionStateMachineTests {
         try DisplaySessionControllerTests.run()
         try VirtualDisplayModeTests.run()
         try AspectFitViewportTests.run()
+        try PreviewCoordinateMapperTests.run()
+        try PreviewWindowSizingTests.run()
 
         print("SchreibtischunterlageCoreTests: PASS")
     }

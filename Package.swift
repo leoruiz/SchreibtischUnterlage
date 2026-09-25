@@ -3,34 +3,65 @@
 import PackageDescription
 
 let package = Package(
-    name: "Schreibtischunterlage",
+    name: "SchreibtischUnterlage",
     platforms: [
         .macOS(.v15),
     ],
     products: [
         .executable(
-            name: "Schreibtischunterlage",
-            targets: ["Schreibtischunterlage"]
+            name: "SchreibtischUnterlage",
+            targets: ["SchreibtischUnterlage"]
         ),
     ],
     targets: [
         .target(
-            name: "SchreibtischunterlageCore",
+            name: "CGVirtualDisplayBridge",
+            path: "Sources/CGVirtualDisplayBridge",
+            publicHeadersPath: "include",
+            cSettings: [
+                .unsafeFlags(["-fobjc-arc"]),
+            ],
+            linkerSettings: [
+                .linkedFramework("Cocoa"),
+                .linkedFramework("CoreGraphics"),
+            ]
+        ),
+        .target(
+            name: "SchreibtischUnterlageCore",
             linkerSettings: [
                 .linkedFramework("CoreGraphics"),
             ]
         ),
+        .target(
+            name: "SchreibtischUnterlagePlatform",
+            dependencies: [
+                "CGVirtualDisplayBridge",
+                "SchreibtischUnterlageCore",
+            ],
+            linkerSettings: [
+                .linkedFramework("AppKit"),
+                .linkedFramework("CoreMedia"),
+                .linkedFramework("CoreGraphics"),
+                .linkedFramework("CoreVideo"),
+                .linkedFramework("Metal"),
+                .linkedFramework("QuartzCore"),
+                .linkedFramework("ScreenCaptureKit"),
+            ]
+        ),
         .executableTarget(
-            name: "Schreibtischunterlage",
-            dependencies: ["SchreibtischunterlageCore"],
+            name: "SchreibtischUnterlage",
+            dependencies: [
+                "SchreibtischUnterlageCore",
+                "SchreibtischUnterlagePlatform",
+            ],
             linkerSettings: [
                 .linkedFramework("AppKit"),
             ]
         ),
-        .executableTarget(
-            name: "SchreibtischunterlageCoreTests",
-            dependencies: ["SchreibtischunterlageCore"],
-            path: "Tests/SchreibtischunterlageCoreTests"
+        .testTarget(
+            name: "SchreibtischUnterlageCoreTests",
+            dependencies: ["SchreibtischUnterlageCore"],
+            path: "Tests/SchreibtischUnterlageCoreTests"
         ),
     ]
 )

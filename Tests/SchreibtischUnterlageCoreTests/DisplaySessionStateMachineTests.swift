@@ -1,19 +1,59 @@
-@testable import SchreibtischunterlageCore
+import XCTest
+@testable import SchreibtischUnterlageCore
 
 private struct TestFailure: Error, CustomStringConvertible {
     let description: String
 }
 
-@main
+final class SchreibtischUnterlageCoreTests: XCTestCase {
+    func testDisplaySessionStateMachine() throws {
+        try DisplaySessionStateMachineTests.run()
+    }
+
+    func testPhysicalDisplayGuard() throws {
+        try PhysicalDisplayGuardTests.run()
+    }
+
+    @MainActor
+    func testDisplaySessionController() throws {
+        try DisplaySessionControllerTests.run()
+    }
+
+    func testVirtualDisplayModes() throws {
+        try VirtualDisplayModeTests.run()
+    }
+
+    func testAspectFitViewport() throws {
+        try AspectFitViewportTests.run()
+    }
+
+    func testPreviewCoordinateMapper() throws {
+        try PreviewCoordinateMapperTests.run()
+    }
+
+    func testPreviewWindowSizing() throws {
+        try PreviewWindowSizingTests.run()
+    }
+
+    func testPreviewMetricDistribution() throws {
+        try PreviewMetricDistributionTests.run()
+    }
+
+    func testPreviewSurfacingDebouncer() throws {
+        try PreviewSurfacingDebouncerTests.run()
+    }
+
+    func testCursorPortalActivationMode() throws {
+        try CursorPortalActivationModeTests.run()
+    }
+}
+
 enum DisplaySessionStateMachineTests {
-    static func main() throws {
+    static func run() throws {
         try successfulStartAndStop()
         try startFailureCanBeCleanedUp()
         try stopFailureRemainsVisible()
         try invalidTransitionDoesNotChangeState()
-        try PhysicalDisplayGuardTests.run()
-
-        print("SchreibtischunterlageCoreTests: PASS")
     }
 
     private static func expect(

@@ -1,14 +1,24 @@
 public enum PhysicalDisplayViolation: Equatable, Sendable {
-    case displayMissing
+    case displayMissing(identity: PhysicalDisplayIdentity)
     case resolutionChanged(
+        identity: PhysicalDisplayIdentity,
         expectedWidth: Int,
         expectedHeight: Int,
         actualWidth: Int,
         actualHeight: Int
     )
-    case refreshRateChanged(expected: Double, actual: Double)
-    case mainDisplayStateChanged(expected: Bool, actual: Bool)
+    case refreshRateChanged(
+        identity: PhysicalDisplayIdentity,
+        expected: Double,
+        actual: Double
+    )
+    case mainDisplayStateChanged(
+        identity: PhysicalDisplayIdentity,
+        expected: Bool,
+        actual: Bool
+    )
     case arrangementChanged(
+        identity: PhysicalDisplayIdentity,
         expectedX: Double,
         expectedY: Double,
         actualX: Double,
@@ -17,16 +27,16 @@ public enum PhysicalDisplayViolation: Equatable, Sendable {
 }
 
 public struct PhysicalDisplayGuard: Sendable {
-    public let baseline: PhysicalDisplaySnapshot
+    public let baselines: [PhysicalDisplaySnapshot]
     public let refreshRateTolerance: Double
     public let arrangementTolerance: Double
 
     public init(
-        baseline: PhysicalDisplaySnapshot,
+        baselines: [PhysicalDisplaySnapshot],
         refreshRateTolerance: Double = 0.5,
         arrangementTolerance: Double = 0.5
     ) {
-        self.baseline = baseline
+        self.baselines = baselines
         self.refreshRateTolerance = refreshRateTolerance
         self.arrangementTolerance = arrangementTolerance
     }
@@ -34,59 +44,69 @@ public struct PhysicalDisplayGuard: Sendable {
     public func violations(
         in snapshots: [PhysicalDisplaySnapshot]
     ) -> [PhysicalDisplayViolation] {
-        guard let current = snapshots.first(where: { $0.identity == baseline.identity }) else {
-            return [.displayMissing]
+        var currentByIdentity: [PhysicalDisplayIdentity: PhysicalDisplaySnapshot] = [:]
+        for snapshot in snapshots {
+            currentByIdentity[snapshot.identity] = snapshot
         }
 
         var violations: [PhysicalDisplayViolation] = []
+        for baseline in baselines {
+            guard let current = currentByIdentity[baseline.identity] else {
+                violations.append(.displayMissing(identity: baseline.identity))
+                continue
+            }
 
-        if
-            current.pixelWidth != baseline.pixelWidth
+            if
+                current.pixelWidth != baseline.pixelWidth
                 || current.pixelHeight != baseline.pixelHeight
-        {
-            violations.append(
-                .resolutionChanged(
-                    expectedWidth: baseline.pixelWidth,
-                    expectedHeight: baseline.pixelHeight,
-                    actualWidth: current.pixelWidth,
-                    actualHeight: current.pixelHeight
+            {
+                violations.append(
+                    .resolutionChanged(
+                        identity: baseline.identity,
+                        expectedWidth: baseline.pixelWidth,
+                        expectedHeight: baseline.pixelHeight,
+                        actualWidth: current.pixelWidth,
+                        actualHeight: current.pixelHeight
+                    )
                 )
-            )
-        }
+            }
 
-        if abs(current.refreshRate - baseline.refreshRate) > refreshRateTolerance {
-            violations.append(
-                .refreshRateChanged(
-                    expected: baseline.refreshRate,
-                    actual: current.refreshRate
+            if abs(current.refreshRate - baseline.refreshRate) > refreshRateTolerance {
+                violations.append(
+                    .refreshRateChanged(
+                        identity: baseline.identity,
+                        expected: baseline.refreshRate,
+                        actual: current.refreshRate
+                    )
                 )
-            )
-        }
+            }
 
-        if current.isMain != baseline.isMain {
-            violations.append(
-                .mainDisplayStateChanged(
-                    expected: baseline.isMain,
-                    actual: current.isMain
+            if current.isMain != baseline.isMain {
+                violations.append(
+                    .mainDisplayStateChanged(
+                        identity: baseline.identity,
+                        expected: baseline.isMain,
+                        actual: current.isMain
+                    )
                 )
-            )
-        }
+            }
 
-        if
-            abs(current.originX - baseline.originX) > arrangementTolerance
+            if
+                abs(current.originX - baseline.originX) > arrangementTolerance
                 || abs(current.originY - baseline.originY) > arrangementTolerance
-        {
-            violations.append(
-                .arrangementChanged(
-                    expectedX: baseline.originX,
-                    expectedY: baseline.originY,
-                    actualX: current.originX,
-                    actualY: current.originY
+            {
+                violations.append(
+                    .arrangementChanged(
+                        identity: baseline.identity,
+                        expectedX: baseline.originX,
+                        expectedY: baseline.originY,
+                        actualX: current.originX,
+                        actualY: current.originY
+                    )
                 )
-            )
+            }
         }
 
         return violations
     }
 }
-

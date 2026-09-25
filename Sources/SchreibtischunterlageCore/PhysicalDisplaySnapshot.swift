@@ -4,11 +4,18 @@ public struct PhysicalDisplayIdentity: Equatable, Hashable, Sendable {
     public let vendorID: UInt32
     public let modelID: UInt32
     public let serialNumber: UInt32
+    public let unitNumber: UInt32
 
-    public init(vendorID: UInt32, modelID: UInt32, serialNumber: UInt32) {
+    public init(
+        vendorID: UInt32,
+        modelID: UInt32,
+        serialNumber: UInt32,
+        unitNumber: UInt32
+    ) {
         self.vendorID = vendorID
         self.modelID = modelID
         self.serialNumber = serialNumber
+        self.unitNumber = unitNumber
     }
 }
 
@@ -85,7 +92,8 @@ public struct CoreGraphicsPhysicalDisplaySnapshotProvider: PhysicalDisplaySnapsh
             identity: PhysicalDisplayIdentity(
                 vendorID: CGDisplayVendorNumber(displayID),
                 modelID: CGDisplayModelNumber(displayID),
-                serialNumber: CGDisplaySerialNumber(displayID)
+                serialNumber: CGDisplaySerialNumber(displayID),
+                unitNumber: CGDisplayUnitNumber(displayID)
             ),
             pixelWidth: mode.pixelWidth,
             pixelHeight: mode.pixelHeight,
@@ -96,4 +104,3 @@ public struct CoreGraphicsPhysicalDisplaySnapshotProvider: PhysicalDisplaySnapsh
         )
     }
 }
-

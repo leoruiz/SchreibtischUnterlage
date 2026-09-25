@@ -2,27 +2,41 @@
 
 enum PhysicalDisplayGuardTests {
     static func run() throws {
-        try acceptsMatchingDisplay()
+        try acceptsMatchingDisplays()
         try reportsMissingDisplay()
         try reportsAllUnexpectedChanges()
         try acceptsValuesWithinTolerance()
+        try ignoresDisplaysAddedAfterBaseline()
     }
 
-    private static func acceptsMatchingDisplay() throws {
-        let baseline = makeSnapshot()
-        let guardPolicy = PhysicalDisplayGuard(baseline: baseline)
+    private static func acceptsMatchingDisplays() throws {
+        let baselines = [
+            makeSnapshot(unitNumber: 1),
+            makeSnapshot(
+                unitNumber: 2,
+                pixelWidth: 3840,
+                pixelHeight: 2160,
+                refreshRate: 60,
+                isMain: false,
+                originX: 7680
+            ),
+        ]
+        let guardPolicy = PhysicalDisplayGuard(baselines: baselines)
 
         try expect(
-            guardPolicy.violations(in: [baseline]).isEmpty,
-            "Expected matching display to pass validation"
+            guardPolicy.violations(in: baselines).isEmpty,
+            "Expected matching displays to pass validation"
         )
     }
 
     private static func reportsMissingDisplay() throws {
-        let guardPolicy = PhysicalDisplayGuard(baseline: makeSnapshot())
+        let baseline = makeSnapshot()
+        let guardPolicy = PhysicalDisplayGuard(baselines: [baseline])
 
         try expect(
-            guardPolicy.violations(in: []) == [.displayMissing],
+            guardPolicy.violations(in: []) == [
+                .displayMissing(identity: baseline.identity),
+            ],
             "Expected a missing display violation"
         )
     }
@@ -37,12 +51,13 @@ enum PhysicalDisplayGuardTests {
             originX: 100,
             originY: 50
         )
-        let violations = PhysicalDisplayGuard(baseline: baseline).violations(in: [changed])
+        let violations = PhysicalDisplayGuard(baselines: [baseline]).violations(in: [changed])
 
         try expect(violations.count == 4, "Expected four display violations")
         try expect(
             violations.contains(
                 .resolutionChanged(
+                    identity: baseline.identity,
                     expectedWidth: 7680,
                     expectedHeight: 2160,
                     actualWidth: 5120,
@@ -52,16 +67,29 @@ enum PhysicalDisplayGuardTests {
             "Expected a resolution violation"
         )
         try expect(
-            violations.contains(.refreshRateChanged(expected: 120, actual: 60)),
+            violations.contains(
+                .refreshRateChanged(
+                    identity: baseline.identity,
+                    expected: 120,
+                    actual: 60
+                )
+            ),
             "Expected a refresh-rate violation"
         )
         try expect(
-            violations.contains(.mainDisplayStateChanged(expected: true, actual: false)),
+            violations.contains(
+                .mainDisplayStateChanged(
+                    identity: baseline.identity,
+                    expected: true,
+                    actual: false
+                )
+            ),
             "Expected a main-display violation"
         )
         try expect(
             violations.contains(
                 .arrangementChanged(
+                    identity: baseline.identity,
                     expectedX: 0,
                     expectedY: 0,
                     actualX: 100,
@@ -80,7 +108,7 @@ enum PhysicalDisplayGuardTests {
             originY: -0.25
         )
         let guardPolicy = PhysicalDisplayGuard(
-            baseline: baseline,
+            baselines: [baseline],
             refreshRateTolerance: 0.5,
             arrangementTolerance: 0.5
         )
@@ -91,7 +119,19 @@ enum PhysicalDisplayGuardTests {
         )
     }
 
+    private static func ignoresDisplaysAddedAfterBaseline() throws {
+        let baseline = makeSnapshot()
+        let added = makeSnapshot(unitNumber: 2, isMain: false, originX: 7680)
+        let guardPolicy = PhysicalDisplayGuard(baselines: [baseline])
+
+        try expect(
+            guardPolicy.violations(in: [baseline, added]).isEmpty,
+            "Expected displays added after baseline not to invalidate protected displays"
+        )
+    }
+
     private static func makeSnapshot(
+        unitNumber: UInt32 = 1,
         pixelWidth: Int = 7680,
         pixelHeight: Int = 2160,
         refreshRate: Double = 120,
@@ -103,7 +143,8 @@ enum PhysicalDisplayGuardTests {
             identity: PhysicalDisplayIdentity(
                 vendorID: 0x4C2D,
                 modelID: 0x1234,
-                serialNumber: 0x5678
+                serialNumber: 0x5678,
+                unitNumber: unitNumber
             ),
             pixelWidth: pixelWidth,
             pixelHeight: pixelHeight,

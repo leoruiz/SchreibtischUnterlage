@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2b3442"/>
+      <stop offset="0.55" stop-color="#171d27"/>
+      <stop offset="1" stop-color="#0c1119"/>
+    </linearGradient>
+    <linearGradient id="mat" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#376d76"/>
+      <stop offset="0.52" stop-color="#24515b"/>
+      <stop offset="1" stop-color="#17343d"/>
+    </linearGradient>
+    <radialGradient id="screenGlow" cx="50%" cy="42%" r="72%">
+      <stop offset="0" stop-color="#8ee8f2" stop-opacity="0.72"/>
+      <stop offset="0.45" stop-color="#4ab7c9" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#1d6775" stop-opacity="0.12"/>
+    </radialGradient>
+    <linearGradient id="screenSurface" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#d6fbff" stop-opacity="0.34"/>
+      <stop offset="0.18" stop-color="#76dce8" stop-opacity="0.24"/>
+      <stop offset="1" stop-color="#173944" stop-opacity="0.2"/>
+    </linearGradient>
+    <filter id="outerShadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="28" stdDeviation="34" flood-color="#000000" flood-opacity="0.42"/>
+    </filter>
+    <filter id="matShadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#000000" flood-opacity="0.4"/>
+    </filter>
+    <filter id="glow" x="-30%" y="-40%" width="160%" height="180%">
+      <feGaussianBlur stdDeviation="24"/>
+    </filter>
+  </defs>
+
+  <rect
+    x="64"
+    y="64"
+    width="896"
+    height="896"
+    rx="210"
+    fill="url(#background)"
+    filter="url(#outerShadow)"
+  />
+  <rect
+    x="82"
+    y="82"
+    width="860"
+    height="860"
+    rx="192"
+    fill="none"
+    stroke="#ffffff"
+    stroke-opacity="0.08"
+    stroke-width="4"
+  />
+
+  <rect
+    x="148"
+    y="214"
+    width="728"
+    height="596"
+    rx="108"
+    fill="url(#mat)"
+    stroke="#77c4cd"
+    stroke-opacity="0.26"
+    stroke-width="5"
+    filter="url(#matShadow)"
+  />
+  <rect
+    x="170"
+    y="236"
+    width="684"
+    height="552"
+    rx="88"
+    fill="none"
+    stroke="#b4f2f6"
+    stroke-opacity="0.14"
+    stroke-width="3"
+    stroke-dasharray="7 11"
+  />
+
+  <rect
+    x="224"
+    y="286"
+    width="576"
+    height="372"
+    rx="56"
+    fill="#60d8e6"
+    fill-opacity="0.22"
+    filter="url(#glow)"
+  />
+  <rect
+    x="220"
+    y="278"
+    width="584"
+    height="380"
+    rx="58"
+    fill="url(#screenGlow)"
+    stroke="#a8f6fb"
+    stroke-opacity="0.5"
+    stroke-width="5"
+  />
+  <rect
+    x="242"
+    y="300"
+    width="540"
+    height="336"
+    rx="42"
+    fill="url(#screenSurface)"
+    stroke="#e3fdff"
+    stroke-opacity="0.18"
+    stroke-width="3"
+  />
+  <path
+    d="M284 332 H740"
+    fill="none"
+    stroke="#ffffff"
+    stroke-opacity="0.26"
+    stroke-linecap="round"
+    stroke-width="8"
+  />
+
+  <circle cx="754" cy="722" r="29" fill="#9df4f8" fill-opacity="0.84"/>
+  <circle cx="754" cy="722" r="13" fill="#f0ffff"/>
+</svg>

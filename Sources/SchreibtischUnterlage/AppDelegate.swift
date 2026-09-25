@@ -108,6 +108,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func makeMenu() -> NSMenu {
         let menu = NSMenu()
+        menu.autoenablesItems = false
 
         let statusMenuItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
         statusMenuItem.isEnabled = false

@@ -7,6 +7,7 @@ configuration=${CONFIGURATION:-debug}
 app_directory="$root_directory/.build/SchreibtischUnterlage.app"
 contents_directory="$app_directory/Contents"
 executable_directory="$contents_directory/MacOS"
+resources_directory="$contents_directory/Resources"
 
 swift build \
     --package-path "$root_directory" \
@@ -23,9 +24,10 @@ binary_directory=$(
 )
 
 rm -rf "$app_directory"
-mkdir -p "$executable_directory"
+mkdir -p "$executable_directory" "$resources_directory"
 cp "$root_directory/Resources/Info.plist" "$contents_directory/Info.plist"
 cp "$binary_directory/SchreibtischUnterlage" "$executable_directory/SchreibtischUnterlage"
+"$root_directory/Scripts/generate-app-icon.sh" "$resources_directory/AppIcon.icns"
 
 codesign \
     --force \

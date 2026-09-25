@@ -39,6 +39,21 @@ The application bundle is written to:
 .build/SchreibtischUnterlage.app
 ```
 
+To install SU in `/Applications`:
+
+```sh
+make install
+```
+
+To replace the installed copy and launch it immediately:
+
+```sh
+make reinstall
+```
+
+Both commands build and sign the application first. They refuse to replace a
+running copy, so quit SU before reinstalling it.
+
 The manual display probe is intentionally excluded from `make test` because it
 changes the live macOS display configuration. Run it only during attended
 hardware validation:

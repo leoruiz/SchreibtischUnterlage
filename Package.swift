@@ -39,7 +39,13 @@ let package = Package(
                 "SchreibtischunterlageCore",
             ],
             linkerSettings: [
+                .linkedFramework("AppKit"),
+                .linkedFramework("CoreMedia"),
                 .linkedFramework("CoreGraphics"),
+                .linkedFramework("CoreVideo"),
+                .linkedFramework("Metal"),
+                .linkedFramework("QuartzCore"),
+                .linkedFramework("ScreenCaptureKit"),
             ]
         ),
         .executableTarget(

@@ -3,13 +3,15 @@
 A lightweight Apple Silicon virtual display for screen sharing on macOS.
 
 Schreibtischunterlage is a clean-sheet macOS application inspired by
-[DeskPad](https://github.com/Stengo/DeskPad). It will create a guarded virtual
-display and show its contents in a low-latency Metal preview window.
+[DeskPad](https://github.com/Stengo/DeskPad). It creates a guarded virtual
+display and shows its contents in a low-latency Metal preview window.
 
 ## Status
 
-Early development. The initial application intentionally launches without
-creating or changing any displays.
+Early development. The application intentionally launches without creating or
+changing any displays. Choosing **Start Virtual Display** creates exactly one
+managed display, starts a ScreenCaptureKit stream, and opens its Metal preview.
+Closing the preview stops capture and destroys the virtual display.
 
 ## Design constraints
 
@@ -57,13 +59,33 @@ For repeated lifecycle validation:
   --display-probe-cycles=10
 ```
 
+For an attended ScreenCaptureKit and Metal preview validation:
+
+```sh
+.build/Schreibtischunterlage.app/Contents/MacOS/Schreibtischunterlage \
+  --preview-probe-seconds=15
+```
+
+The preview probe requires Screen Recording permission. It creates one virtual
+display, waits until a complete capture frame is submitted to Metal, leaves the
+preview visible for the requested duration, then stops capture and verifies
+display cleanup.
+
 The app refuses to create a second managed display if its vendor, product, and
 serial identity is already online.
+
+The first preview start requests Screen Recording permission. If permission is
+denied, the app destroys the virtual display and offers to open the relevant
+Privacy & Security settings. Start the display again after granting access.
 
 The initial resolution catalog includes common 16:9, 16:10, and ultrawide
 modes from 1280 × 720 through 5120 × 1440. The complete catalog is advertised
 to macOS, so resolution changes happen through Display Settings just like a
 physical monitor. The known-good 2560 × 1600 mode is advertised first.
+
+The preview consumes complete ScreenCaptureKit frames only, keeps the newest
+pending frame when capture outruns the UI, and renders IOSurface-backed pixel
+buffers directly through Metal with aspect-fit scaling.
 
 ## Attribution
 

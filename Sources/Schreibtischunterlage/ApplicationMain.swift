@@ -16,6 +16,15 @@ enum ApplicationMain {
             exit(probe.exitCode)
         }
 
+        if let previewProbeDuration = previewProbeDuration() {
+            let probe = PreviewProbe(visibleDuration: previewProbeDuration)
+            application.setActivationPolicy(.accessory)
+            application.delegate = probe
+            application.run()
+            withExtendedLifetime(probe) {}
+            exit(probe.exitCode)
+        }
+
         let delegate = AppDelegate()
 
         application.setActivationPolicy(.accessory)
@@ -48,5 +57,25 @@ enum ApplicationMain {
         }
 
         return nil
+    }
+
+    private static func previewProbeDuration() -> Duration? {
+        let prefix = "--preview-probe-seconds="
+        guard let argument = CommandLine.arguments.dropFirst().first(
+            where: { $0.hasPrefix(prefix) }
+        ) else {
+            return nil
+        }
+
+        let rawValue = argument.dropFirst(prefix.count)
+        guard
+            let seconds = Int(rawValue),
+            (3...60).contains(seconds)
+        else {
+            fputs("preview probe duration must be between 3 and 60 seconds\n", stderr)
+            exit(EXIT_FAILURE)
+        }
+
+        return .seconds(seconds)
     }
 }

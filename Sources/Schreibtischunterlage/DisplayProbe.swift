@@ -84,7 +84,7 @@ final class DisplayProbe: NSObject, NSApplicationDelegate {
         print("virtual display teardown: PASS (\(cycleCount) cycles)")
     }
 
-    private static func waitForDisplayMode(
+    static func waitForDisplayMode(
         displayID: CGDirectDisplayID
     ) async throws -> CGDisplayMode {
         for _ in 0..<100 {
@@ -102,7 +102,7 @@ final class DisplayProbe: NSObject, NSApplicationDelegate {
         )
     }
 
-    private static func waitForDisplayRemoval(
+    static func waitForDisplayRemoval(
         displayID: CGDirectDisplayID
     ) async throws {
         for _ in 0..<50 {
@@ -117,7 +117,7 @@ final class DisplayProbe: NSObject, NSApplicationDelegate {
         )
     }
 
-    private static func verifyPhysicalDisplays(
+    static func verifyPhysicalDisplays(
         baseline: [PhysicalDisplaySnapshot],
         snapshotProvider: any PhysicalDisplaySnapshotProviding
     ) throws {

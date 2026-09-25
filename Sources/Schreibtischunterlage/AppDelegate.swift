@@ -1,6 +1,15 @@
 import AppKit
+import CoreGraphics
 import SchreibtischunterlageCore
 import SchreibtischunterlagePlatform
+
+private enum PreviewLifecycleError: Error, LocalizedError {
+    case missingManagedDisplay
+
+    var errorDescription: String? {
+        "The managed virtual display did not publish a usable display identifier."
+    }
+}
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -15,6 +24,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var stopMenuItem: NSMenuItem?
     private var displayChangeObserver: NSObjectProtocol?
     private var lastStatusMessage: String?
+    private var previewWindowController: PreviewWindowController?
+    private var lifecycleTask: Task<Void, Never>?
+    private var isTransitioning = false
+    private var transitionFailure: Error?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
@@ -39,6 +52,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        lifecycleTask?.cancel()
+        previewWindowController?.invalidate()
+        previewWindowController = nil
         sessionController.stopIfNeeded()
 
         if let displayChangeObserver {
@@ -94,19 +110,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc
     private func startVirtualDisplay() {
-        do {
-            try sessionController.start(
-                configuration: VirtualDisplayModeCatalog.standardConfiguration
-            )
-            lastStatusMessage = nil
-        } catch {
-            lastStatusMessage = "Start failed"
-            presentError(
-                title: "Could not start the virtual display",
-                error: error
-            )
+        guard
+            !isTransitioning,
+            sessionController.state == .inactive
+        else {
+            return
         }
+
+        isTransitioning = true
+        lastStatusMessage = "Starting virtual display…"
         updateMenu()
+
+        lifecycleTask = Task { @MainActor [weak self] in
+            await self?.startVirtualDisplayAndPreview()
+        }
     }
 
     @objc
@@ -121,9 +138,94 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc
     private func stopVirtualDisplay() {
+        guard
+            !isTransitioning,
+            sessionController.state != .inactive
+        else {
+            return
+        }
+
+        isTransitioning = true
+        lastStatusMessage = "Stopping virtual display…"
+        updateMenu()
+
+        lifecycleTask = Task { @MainActor [weak self] in
+            await self?.stopVirtualDisplayAndPreview()
+        }
+    }
+
+    private func startVirtualDisplayAndPreview() async {
+        do {
+            try sessionController.start(
+                configuration: VirtualDisplayModeCatalog.standardConfiguration
+            )
+            guard let displayID = sessionController.activeDisplayID else {
+                throw PreviewLifecycleError.missingManagedDisplay
+            }
+
+            let previewWindowController = try PreviewWindowController.make()
+            previewWindowController.closeHandler = { [weak self] in
+                self?.stopVirtualDisplay()
+            }
+            previewWindowController.failureHandler = { [weak self] error in
+                self?.handleCaptureFailure(error)
+            }
+            self.previewWindowController = previewWindowController
+
+            try await previewWindowController.start(displayID: displayID)
+            try Task.checkCancellation()
+            lastStatusMessage = nil
+            transitionFailure = nil
+        } catch {
+            if let previewWindowController {
+                try? await previewWindowController.stop()
+            }
+            previewWindowController = nil
+            sessionController.stopIfNeeded()
+
+            if let transitionFailure {
+                self.transitionFailure = nil
+                lastStatusMessage = "Start failed"
+                presentError(
+                    title: "Could not start the virtual display",
+                    error: transitionFailure
+                )
+            } else if !(error is CancellationError && sessionController.state == .inactive) {
+                lastStatusMessage = "Start failed"
+                presentError(
+                    title: "Could not start the virtual display",
+                    error: error
+                )
+            }
+        }
+
+        isTransitioning = false
+        lifecycleTask = nil
+        updateMenu()
+    }
+
+    private func stopVirtualDisplayAndPreview() async {
+        var captureStopError: Error?
+        if let previewWindowController {
+            do {
+                try await previewWindowController.stop()
+            } catch {
+                captureStopError = error
+            }
+        }
+        previewWindowController = nil
+
         do {
             try sessionController.stop()
-            lastStatusMessage = nil
+            if let captureStopError {
+                lastStatusMessage = "Capture stop failed"
+                presentError(
+                    title: "The preview did not stop cleanly",
+                    error: captureStopError
+                )
+            } else {
+                lastStatusMessage = nil
+            }
         } catch {
             lastStatusMessage = "Stop failed"
             presentError(
@@ -131,7 +233,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 error: error
             )
         }
+
+        isTransitioning = false
+        lifecycleTask = nil
         updateMenu()
+    }
+
+    private func handleCaptureFailure(_ error: Error) {
+        guard sessionController.state != .inactive else {
+            return
+        }
+
+        if isTransitioning {
+            transitionFailure = error
+            lifecycleTask?.cancel()
+            return
+        }
+
+        presentError(
+            title: "Screen capture stopped unexpectedly",
+            error: error
+        )
+        stopVirtualDisplay()
     }
 
     private func handleDisplayConfigurationChange() {
@@ -139,11 +262,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let violations = try sessionController.handleDisplayConfigurationChange()
             if !violations.isEmpty {
                 lastStatusMessage = "Stopped after physical display change"
+                cancelTransitionOrStopPreview()
             }
         } catch {
             lastStatusMessage = "Stopped after display monitoring failed"
+            cancelTransitionOrStopPreview()
         }
         updateMenu()
+    }
+
+    private func cancelTransitionOrStopPreview() {
+        if isTransitioning {
+            lifecycleTask?.cancel()
+        } else {
+            stopPreviewAfterExternalTeardown()
+        }
+    }
+
+    private func stopPreviewAfterExternalTeardown() {
+        guard !isTransitioning else {
+            return
+        }
+
+        isTransitioning = true
+        lifecycleTask = Task { @MainActor [weak self] in
+            guard let self else {
+                return
+            }
+
+            if let previewWindowController {
+                do {
+                    try await previewWindowController.stop()
+                } catch {
+                    presentError(
+                        title: "The preview did not stop cleanly",
+                        error: error
+                    )
+                }
+            }
+            previewWindowController = nil
+            isTransitioning = false
+            lifecycleTask = nil
+            updateMenu()
+        }
     }
 
     private func updateMenu() {
@@ -158,8 +319,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             statusMenuItem?.title = "Virtual Display: Inactive"
         }
 
-        startMenuItem?.isEnabled = isInactive
-        stopMenuItem?.isEnabled = !isInactive
+        startMenuItem?.isEnabled = isInactive && !isTransitioning
+        stopMenuItem?.isEnabled = !isInactive && !isTransitioning
     }
 
     private func presentError(title: String, error: Error) {
@@ -167,6 +328,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         alert.messageText = title
         alert.informativeText = error.localizedDescription
         alert.alertStyle = .critical
-        alert.runModal()
+
+        if case ScreenCaptureCoordinatorError.permissionDenied = error {
+            alert.addButton(withTitle: "Open Privacy Settings")
+            alert.addButton(withTitle: "OK")
+            if alert.runModal() == .alertFirstButtonReturn {
+                openScreenRecordingSettings()
+            }
+        } else {
+            alert.runModal()
+        }
+    }
+
+    private func openScreenRecordingSettings() {
+        guard let url = URL(
+            string: """
+            x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture
+            """
+        ) else {
+            return
+        }
+        NSWorkspace.shared.open(url)
     }
 }

@@ -4,18 +4,16 @@ import Darwin
 @main
 enum ApplicationMain {
     @MainActor
-    static func main() async {
+    static func main() {
         let application = NSApplication.shared
 
         if CommandLine.arguments.contains("--display-probe") {
+            let probe = DisplayProbe()
             application.setActivationPolicy(.prohibited)
-            do {
-                try await DisplayProbe.run()
-            } catch {
-                fputs("display probe failed: \(error)\n", stderr)
-                exit(EXIT_FAILURE)
-            }
-            return
+            application.delegate = probe
+            application.run()
+            withExtendedLifetime(probe) {}
+            exit(probe.exitCode)
         }
 
         let delegate = AppDelegate()

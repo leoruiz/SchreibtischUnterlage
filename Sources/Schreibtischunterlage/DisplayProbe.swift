@@ -1,4 +1,6 @@
+import AppKit
 import CoreGraphics
+import Darwin
 import Foundation
 import SchreibtischunterlageCore
 import SchreibtischunterlagePlatform
@@ -7,9 +9,28 @@ private struct DisplayProbeFailure: Error, CustomStringConvertible {
     let description: String
 }
 
-enum DisplayProbe {
-    @MainActor
-    static func run() async throws {
+@MainActor
+final class DisplayProbe: NSObject, NSApplicationDelegate {
+    private(set) var exitCode = EXIT_FAILURE
+    private var controller: DisplaySessionController?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        Task { @MainActor in
+            do {
+                try await run()
+                exitCode = EXIT_SUCCESS
+            } catch {
+                fputs("display probe failed: \(error)\n", stderr)
+            }
+            NSApplication.shared.terminate(nil)
+        }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        controller?.stopIfNeeded()
+    }
+
+    private func run() async throws {
         let snapshotProvider = CoreGraphicsPhysicalDisplaySnapshotProvider()
         let baseline = try snapshotProvider.snapshots()
         guard !baseline.isEmpty else {
@@ -20,8 +41,10 @@ enum DisplayProbe {
             snapshotProvider: snapshotProvider,
             displayFactory: CGVirtualDisplayFactory()
         )
+        self.controller = controller
         defer {
             controller.stopIfNeeded()
+            self.controller = nil
         }
 
         print("baseline displays: \(baseline.count)")
@@ -34,7 +57,7 @@ enum DisplayProbe {
         }
         print("virtual display created: id=\(displayID)")
 
-        let activeMode = try await waitForDisplayMode(displayID: displayID)
+        let activeMode = try await Self.waitForDisplayMode(displayID: displayID)
         print(
             "virtual display online: "
                 + "\(activeMode.pixelWidth)x\(activeMode.pixelHeight) "
@@ -43,7 +66,7 @@ enum DisplayProbe {
 
         try await Task.sleep(for: .seconds(3))
         try controller.stop()
-        try await waitForDisplayRemoval(displayID: displayID)
+        try await Self.waitForDisplayRemoval(displayID: displayID)
 
         let finalSnapshots = try snapshotProvider.snapshots()
         let violations = PhysicalDisplayGuard(baselines: baseline).violations(
@@ -108,4 +131,3 @@ enum DisplayProbe {
         return Array(displayIDs.prefix(Int(count)))
     }
 }
-

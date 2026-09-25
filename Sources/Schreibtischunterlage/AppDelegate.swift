@@ -11,6 +11,13 @@ private enum PreviewLifecycleError: Error, LocalizedError {
     }
 }
 
+private enum PreferenceKey {
+    static let previewAutoSurfacingMode =
+        "previewAutoSurfacingMode"
+    static let cursorPortalActivationMode =
+        "cursorPortalActivationMode"
+}
+
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let sessionController = DisplaySessionController(
@@ -22,6 +29,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusMenuItem: NSMenuItem?
     private var startMenuItem: NSMenuItem?
     private var stopMenuItem: NSMenuItem?
+    private var autoSurfacingMenuItems =
+        [PreviewAutoSurfacingMode: NSMenuItem]()
+    private var cursorPortalMenuItems =
+        [CursorPortalActivationMode: NSMenuItem]()
     private var displayChangeObserver: NSObjectProtocol?
     private var lastStatusMessage: String?
     private var previewWindowController: PreviewWindowController?
@@ -30,6 +41,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var transitionFailure: Error?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        UserDefaults.standard.register(
+            defaults: [
+                PreferenceKey.previewAutoSurfacingMode:
+                    PreviewAutoSurfacingMode.raiseOnEntry.rawValue,
+                PreferenceKey.cursorPortalActivationMode:
+                    CursorPortalActivationMode.singleClick.rawValue,
+            ]
+        )
+
         let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         statusItem.button?.image = NSImage(
             systemSymbolName: "display",
@@ -96,6 +116,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         displaySettingsItem.target = self
         menu.addItem(displaySettingsItem)
 
+        let autoSurfacingItem = NSMenuItem(
+            title: "Preview Auto-Surfacing",
+            action: nil,
+            keyEquivalent: ""
+        )
+        let autoSurfacingMenu = NSMenu()
+        for mode in PreviewAutoSurfacingMode.allCases {
+            let item = NSMenuItem(
+                title: title(for: mode),
+                action: #selector(selectPreviewAutoSurfacingMode(_:)),
+                keyEquivalent: ""
+            )
+            item.target = self
+            item.representedObject = mode.rawValue
+            autoSurfacingMenu.addItem(item)
+            autoSurfacingMenuItems[mode] = item
+        }
+        autoSurfacingItem.submenu = autoSurfacingMenu
+        menu.addItem(autoSurfacingItem)
+
+        let cursorPortalItem = NSMenuItem(
+            title: "Pointer Teleport",
+            action: nil,
+            keyEquivalent: ""
+        )
+        let cursorPortalMenu = NSMenu()
+        for mode in CursorPortalActivationMode.allCases {
+            let item = NSMenuItem(
+                title: title(for: mode),
+                action: #selector(selectCursorPortalActivationMode(_:)),
+                keyEquivalent: ""
+            )
+            item.target = self
+            item.representedObject = mode.rawValue
+            cursorPortalMenu.addItem(item)
+            cursorPortalMenuItems[mode] = item
+        }
+        cursorPortalItem.submenu = cursorPortalMenu
+        menu.addItem(cursorPortalItem)
+
         menu.addItem(.separator())
 
         let quitItem = NSMenuItem(
@@ -137,6 +197,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc
+    private func selectPreviewAutoSurfacingMode(_ sender: NSMenuItem) {
+        guard
+            let rawValue = sender.representedObject as? String,
+            let mode = PreviewAutoSurfacingMode(rawValue: rawValue)
+        else {
+            return
+        }
+
+        UserDefaults.standard.set(
+            mode.rawValue,
+            forKey: PreferenceKey.previewAutoSurfacingMode
+        )
+        previewWindowController?.setAutoSurfacingMode(mode)
+        updateMenu()
+    }
+
+    @objc
+    private func selectCursorPortalActivationMode(_ sender: NSMenuItem) {
+        guard
+            let rawValue = sender.representedObject as? String,
+            let mode = CursorPortalActivationMode(rawValue: rawValue)
+        else {
+            return
+        }
+
+        UserDefaults.standard.set(
+            mode.rawValue,
+            forKey: PreferenceKey.cursorPortalActivationMode
+        )
+        previewWindowController?.setCursorPortalActivationMode(mode)
+        updateMenu()
+    }
+
+    @objc
     private func stopVirtualDisplay() {
         guard
             !isTransitioning,
@@ -163,7 +257,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 throw PreviewLifecycleError.missingManagedDisplay
             }
 
-            let previewWindowController = try PreviewWindowController.make()
+            let previewWindowController = try PreviewWindowController.make(
+                autoSurfacingMode: previewAutoSurfacingMode,
+                cursorPortalActivationMode: cursorPortalActivationMode
+            )
             previewWindowController.closeHandler = { [weak self] in
                 self?.stopVirtualDisplay()
             }
@@ -329,6 +426,56 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         startMenuItem?.isEnabled = isInactive && !isTransitioning
         stopMenuItem?.isEnabled = !isInactive && !isTransitioning
+        for (mode, item) in autoSurfacingMenuItems {
+            item.state = mode == previewAutoSurfacingMode ? .on : .off
+        }
+        for (mode, item) in cursorPortalMenuItems {
+            item.state = mode == cursorPortalActivationMode ? .on : .off
+        }
+    }
+
+    private var previewAutoSurfacingMode: PreviewAutoSurfacingMode {
+        guard
+            let rawValue = UserDefaults.standard.string(
+                forKey: PreferenceKey.previewAutoSurfacingMode
+            ),
+            let mode = PreviewAutoSurfacingMode(rawValue: rawValue)
+        else {
+            return .raiseOnEntry
+        }
+        return mode
+    }
+
+    private var cursorPortalActivationMode: CursorPortalActivationMode {
+        guard
+            let rawValue = UserDefaults.standard.string(
+                forKey: PreferenceKey.cursorPortalActivationMode
+            ),
+            let mode = CursorPortalActivationMode(rawValue: rawValue)
+        else {
+            return .singleClick
+        }
+        return mode
+    }
+
+    private func title(for mode: PreviewAutoSurfacingMode) -> String {
+        switch mode {
+        case .off:
+            return "Off"
+        case .raiseOnEntry:
+            return "Bring Preview to Front When Pointer Enters"
+        case .raiseOnEntryAndLowerOnExit:
+            return "Bring Preview to Front on Entry, Send Behind on Exit"
+        }
+    }
+
+    private func title(for mode: CursorPortalActivationMode) -> String {
+        switch mode {
+        case .singleClick:
+            return "Single Click"
+        case .doubleClick:
+            return "Double Click"
+        }
     }
 
     private func presentError(title: String, error: Error) {

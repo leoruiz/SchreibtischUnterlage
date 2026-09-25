@@ -122,6 +122,24 @@ preview margins are ignored. The initial preview size adapts to the available
 physical screen, using up to 80 percent of its visible width and 90 percent of
 its visible height while preserving the active virtual-display aspect ratio.
 
+The persisted **Pointer Teleport** menu selects **Single Click** (the default)
+or **Double Click**. In double-click mode, the first click leaves the cursor in
+the preview and the second click performs the teleport.
+
+The **Preview Auto-Surfacing** menu offers three persisted modes:
+
+- **Off** leaves window stacking entirely manual.
+- **Bring Preview to Front When Pointer Enters** is the default. It raises the
+  preview once when the pointer enters the virtual display, matching DeskPad's
+  behavior without forcing it back down.
+- **Bring Preview to Front on Entry, Send Behind on Exit** raises the preview
+  when the pointer enters the virtual display and explicitly sends it behind
+  normal windows when the pointer returns to a physical display.
+
+Pointer presence is read from Core Graphics without Accessibility permission.
+Two consecutive 100 ms samples are required before changing behavior, avoiding
+window-level flicker near display boundaries.
+
 When the virtual-display resolution changes in macOS Display Settings, the
 ScreenCaptureKit stream updates to the new pixel dimensions. The preview keeps
 its current width where possible and adjusts its height to the new aspect

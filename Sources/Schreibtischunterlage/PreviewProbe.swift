@@ -89,7 +89,10 @@ final class PreviewProbe: NSObject, NSApplicationDelegate {
         )
 
         let previewWindowController = try PreviewWindowController.make(
-            measuresLatency: measuresLatency
+            measuresLatency: measuresLatency,
+            autoSurfacingMode: testsCursorPortal
+                ? .raiseOnEntryAndLowerOnExit
+                : .raiseOnEntry
         )
         previewWindowController.failureHandler = { [weak self] error in
             self?.captureFailure = error
@@ -102,7 +105,7 @@ final class PreviewProbe: NSObject, NSApplicationDelegate {
         print("metal frame submission: PASS")
 
         if testsCursorPortal {
-            try verifyCursorPortal(
+            try await verifyCursorPortal(
                 displayID: displayID,
                 previewWindowController: previewWindowController
             )
@@ -141,7 +144,16 @@ final class PreviewProbe: NSObject, NSApplicationDelegate {
     private func verifyCursorPortal(
         displayID: CGDirectDisplayID,
         previewWindowController: PreviewWindowController
-    ) throws {
+    ) async throws {
+        guard let originalCursorLocation = CGEvent(source: nil)?.location else {
+            throw PreviewProbeFailure(
+                description: "Could not read the original cursor location"
+            )
+        }
+        defer {
+            restoreCursor(to: originalCursorLocation)
+        }
+
         guard let sourceSize = previewWindowController.currentSourceSize else {
             throw PreviewProbeFailure(
                 description: "Preview has no source size for pointer mapping"
@@ -198,6 +210,8 @@ final class PreviewProbe: NSObject, NSApplicationDelegate {
                 """
             )
         }
+
+        restoreCursor(to: originalCursorLocation)
     }
 
     private func waitForRenderedFrame(

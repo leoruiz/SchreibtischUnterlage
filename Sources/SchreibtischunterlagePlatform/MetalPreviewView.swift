@@ -83,14 +83,19 @@ public final class MetalPreviewView: NSView {
     private let samplerState: MTLSamplerState
     private let textureCache: CVMetalTextureCache
     private let latencyTracker: PreviewLatencyTracker?
+    private var cursorPortalActivationMode: CursorPortalActivationMode
     private var pendingClickLocation: CGPoint?
 
     public static func make() throws -> MetalPreviewView {
-        try make(latencyTracker: nil)
+        try make(
+            latencyTracker: nil,
+            cursorPortalActivationMode: .singleClick
+        )
     }
 
     static func make(
-        latencyTracker: PreviewLatencyTracker?
+        latencyTracker: PreviewLatencyTracker?,
+        cursorPortalActivationMode: CursorPortalActivationMode
     ) throws -> MetalPreviewView {
         guard let device = MTLCreateSystemDefaultDevice() else {
             throw MetalPreviewViewError.metalUnavailable
@@ -98,13 +103,15 @@ public final class MetalPreviewView: NSView {
 
         return try MetalPreviewView(
             device: device,
-            latencyTracker: latencyTracker
+            latencyTracker: latencyTracker,
+            cursorPortalActivationMode: cursorPortalActivationMode
         )
     }
 
     private init(
         device: MTLDevice,
-        latencyTracker: PreviewLatencyTracker?
+        latencyTracker: PreviewLatencyTracker?,
+        cursorPortalActivationMode: CursorPortalActivationMode
     ) throws {
         guard let commandQueue = device.makeCommandQueue() else {
             throw MetalPreviewViewError.commandQueueUnavailable
@@ -163,6 +170,7 @@ public final class MetalPreviewView: NSView {
         self.samplerState = samplerState
         self.textureCache = textureCache
         self.latencyTracker = latencyTracker
+        self.cursorPortalActivationMode = cursorPortalActivationMode
 
         super.init(frame: .zero)
 
@@ -204,11 +212,23 @@ public final class MetalPreviewView: NSView {
         }
 
         pendingClickLocation = nil
+        guard cursorPortalActivationMode.shouldActivate(
+            clickCount: event.clickCount
+        ) else {
+            return
+        }
         cursorPortalHandler?(convert(event.locationInWindow, from: nil))
     }
 
     public override func mouseDragged(with event: NSEvent) {
         cancelClickIfDragged(event)
+    }
+
+    func setCursorPortalActivationMode(
+        _ mode: CursorPortalActivationMode
+    ) {
+        cursorPortalActivationMode = mode
+        pendingClickLocation = nil
     }
 
     @discardableResult

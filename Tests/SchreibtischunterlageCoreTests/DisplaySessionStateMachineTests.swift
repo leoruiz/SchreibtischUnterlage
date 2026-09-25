@@ -18,6 +18,8 @@ enum DisplaySessionStateMachineTests {
         try PreviewCoordinateMapperTests.run()
         try PreviewWindowSizingTests.run()
         try PreviewMetricDistributionTests.run()
+        try PreviewSurfacingDebouncerTests.run()
+        try CursorPortalActivationModeTests.run()
 
         print("SchreibtischunterlageCoreTests: PASS")
     }

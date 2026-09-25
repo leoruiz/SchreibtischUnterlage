@@ -32,6 +32,9 @@ public final class PreviewWindowController:
     private var captureCoordinator: ScreenCaptureCoordinator?
     private var cursorPortal: CursorPortal?
     private var displayID: CGDirectDisplayID?
+    private var pointerMonitorTimer: Timer?
+    private var surfacingDebouncer = PreviewSurfacingDebouncer()
+    private var autoSurfacingMode: PreviewAutoSurfacingMode
     private var reconfigurationTask: Task<Void, Never>?
     private var displayConfigurationRevision = 0
     private var isClosingProgrammatically = false
@@ -39,23 +42,29 @@ public final class PreviewWindowController:
     private var hasAppliedInitialWindowSize = false
 
     public static func make(
-        measuresLatency: Bool = false
+        measuresLatency: Bool = false,
+        autoSurfacingMode: PreviewAutoSurfacingMode = .raiseOnEntry,
+        cursorPortalActivationMode: CursorPortalActivationMode = .singleClick
     ) throws -> PreviewWindowController {
         let latencyTracker = measuresLatency ? PreviewLatencyTracker() : nil
         return try PreviewWindowController(
             previewView: MetalPreviewView.make(
-                latencyTracker: latencyTracker
+                latencyTracker: latencyTracker,
+                cursorPortalActivationMode: cursorPortalActivationMode
             ),
-            latencyTracker: latencyTracker
+            latencyTracker: latencyTracker,
+            autoSurfacingMode: autoSurfacingMode
         )
     }
 
     private init(
         previewView: MetalPreviewView,
-        latencyTracker: PreviewLatencyTracker?
+        latencyTracker: PreviewLatencyTracker?,
+        autoSurfacingMode: PreviewAutoSurfacingMode
     ) {
         self.previewView = previewView
         self.latencyTracker = latencyTracker
+        self.autoSurfacingMode = autoSurfacingMode
 
         let contentViewController = NSViewController()
         contentViewController.view = previewView
@@ -106,6 +115,7 @@ public final class PreviewWindowController:
             showWindow(nil)
             window?.makeKeyAndOrderFront(nil)
             NSApplication.shared.activate()
+            startPointerMonitorIfNeeded()
         } catch {
             captureCoordinator = nil
             throw error
@@ -121,6 +131,7 @@ public final class PreviewWindowController:
 
         reconfigurationTask?.cancel()
         reconfigurationTask = nil
+        stopPointerMonitor()
         displayID = nil
         let captureCoordinator = captureCoordinator
         self.captureCoordinator = nil
@@ -135,6 +146,7 @@ public final class PreviewWindowController:
         isClosingProgrammatically = true
         reconfigurationTask?.cancel()
         reconfigurationTask = nil
+        stopPointerMonitor()
         displayID = nil
         captureCoordinator?.invalidate()
         captureCoordinator = nil
@@ -142,6 +154,26 @@ public final class PreviewWindowController:
         previewView.cursorPortalHandler = nil
         window?.orderOut(nil)
         isClosingProgrammatically = false
+    }
+
+    public func setAutoSurfacingMode(
+        _ mode: PreviewAutoSurfacingMode
+    ) {
+        guard mode != autoSurfacingMode else {
+            return
+        }
+
+        autoSurfacingMode = mode
+        stopPointerMonitor()
+        if mode != .off {
+            startPointerMonitorIfNeeded()
+        }
+    }
+
+    public func setCursorPortalActivationMode(
+        _ mode: CursorPortalActivationMode
+    ) {
+        previewView.setCursorPortalActivationMode(mode)
     }
 
     public func handleDisplayConfigurationChange() {
@@ -229,6 +261,72 @@ public final class PreviewWindowController:
             )
         } catch {
             interactionFailureHandler?(error)
+        }
+    }
+
+    private func startPointerMonitorIfNeeded() {
+        guard
+            autoSurfacingMode != .off,
+            displayID != nil,
+            pointerMonitorTimer == nil
+        else {
+            return
+        }
+
+        surfacingDebouncer.reset()
+        let timer = Timer(timeInterval: 0.1, repeats: true) {
+            [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.updatePreviewSurfacing()
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        pointerMonitorTimer = timer
+        updatePreviewSurfacing()
+    }
+
+    private func stopPointerMonitor() {
+        pointerMonitorTimer?.invalidate()
+        pointerMonitorTimer = nil
+        surfacingDebouncer.reset()
+        window?.level = .normal
+    }
+
+    private func updatePreviewSurfacing() {
+        guard
+            autoSurfacingMode != .off,
+            let displayID,
+            let pointerLocation = CGEvent(source: nil)?.location
+        else {
+            return
+        }
+
+        let isWithinVirtualDisplay = CGDisplayBounds(displayID).contains(
+            pointerLocation
+        )
+        guard let shouldFloat = surfacingDebouncer.observe(
+            isWithinVirtualDisplay: isWithinVirtualDisplay
+        ) else {
+            return
+        }
+
+        applyPointerPresence(shouldFloat)
+    }
+
+    private func applyPointerPresence(_ isWithinVirtualDisplay: Bool) {
+        switch autoSurfacingMode {
+        case .off:
+            return
+        case .raiseOnEntry:
+            if isWithinVirtualDisplay {
+                window?.orderFrontRegardless()
+            }
+        case .raiseOnEntryAndLowerOnExit:
+            if isWithinVirtualDisplay {
+                window?.orderFrontRegardless()
+            } else {
+                window?.orderBack(nil)
+            }
         }
     }
 

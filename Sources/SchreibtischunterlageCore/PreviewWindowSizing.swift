@@ -3,28 +3,19 @@ import CoreGraphics
 public enum PreviewWindowSizing {
     public static func initialContentSize(
         sourceSize: CGSize,
-        availableSize: CGSize,
-        maximumSize: CGSize = CGSize(width: 1800, height: 1125)
+        availableSize: CGSize
     ) -> CGSize? {
         guard
             sourceSize.width > 0,
             sourceSize.height > 0,
             availableSize.width > 0,
-            availableSize.height > 0,
-            maximumSize.width > 0,
-            maximumSize.height > 0
+            availableSize.height > 0
         else {
             return nil
         }
 
-        let availableWidth = min(
-            availableSize.width * 0.7,
-            maximumSize.width
-        )
-        let availableHeight = min(
-            availableSize.height * 0.8,
-            maximumSize.height
-        )
+        let availableWidth = availableSize.width * 0.8
+        let availableHeight = availableSize.height * 0.9
         let scale = min(
             availableWidth / sourceSize.width,
             availableHeight / sourceSize.height
@@ -35,5 +26,31 @@ public enum PreviewWindowSizing {
             height: sourceSize.height * scale
         )
     }
-}
 
+    public static func contentSizePreservingWidth(
+        sourceSize: CGSize,
+        currentContentSize: CGSize,
+        availableSize: CGSize
+    ) -> CGSize? {
+        guard
+            sourceSize.width > 0,
+            sourceSize.height > 0,
+            currentContentSize.width > 0,
+            availableSize.width > 0,
+            availableSize.height > 0
+        else {
+            return nil
+        }
+
+        let aspectRatio = sourceSize.width / sourceSize.height
+        var width = min(currentContentSize.width, availableSize.width)
+        var height = width / aspectRatio
+
+        if height > availableSize.height {
+            height = availableSize.height
+            width = height * aspectRatio
+        }
+
+        return CGSize(width: width, height: height)
+    }
+}

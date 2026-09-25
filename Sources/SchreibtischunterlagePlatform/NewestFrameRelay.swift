@@ -25,8 +25,10 @@ final class NewestFrameRelay: @unchecked Sendable {
             return
         }
 
-        Task { @MainActor [weak self] in
-            self?.deliverLatestFrame()
+        DispatchQueue.main.async { [weak self] in
+            MainActor.assumeIsolated {
+                self?.deliverLatestFrame()
+            }
         }
     }
 
@@ -44,4 +46,3 @@ final class NewestFrameRelay: @unchecked Sendable {
         }
     }
 }
-

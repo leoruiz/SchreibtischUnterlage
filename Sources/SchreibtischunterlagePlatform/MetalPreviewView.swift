@@ -156,7 +156,9 @@ public final class MetalPreviewView: NSView {
         metalLayer.device = device
         metalLayer.pixelFormat = .bgra8Unorm
         metalLayer.framebufferOnly = true
+        metalLayer.maximumDrawableCount = 2
         metalLayer.displaySyncEnabled = true
+        metalLayer.presentsWithTransaction = false
         metalLayer.backgroundColor = NSColor.black.cgColor
     }
 

@@ -1,3 +1,4 @@
+@preconcurrency import AppKit
 @preconcurrency import CoreGraphics
 @preconcurrency import CoreMedia
 @preconcurrency import CoreVideo
@@ -41,6 +42,7 @@ public final class ScreenCaptureCoordinator:
 
     private var stream: SCStream?
     private var isStopping = false
+    private var configuredPixelSize: CGSize?
 
     public init(
         frameHandler: @escaping @MainActor @Sendable (CapturedFrame) -> Void,
@@ -59,19 +61,9 @@ public final class ScreenCaptureCoordinator:
             throw ScreenCaptureCoordinatorError.permissionDenied
         }
 
-        guard let displayMode = CGDisplayCopyDisplayMode(displayID) else {
-            throw ScreenCaptureCoordinatorError.displayHasNoUsableMode(displayID)
-        }
-
+        let displayMode = try await waitForDisplayMode(displayID: displayID)
         let display = try await findDisplay(displayID: displayID)
-        let configuration = SCStreamConfiguration()
-        configuration.width = displayMode.pixelWidth
-        configuration.height = displayMode.pixelHeight
-        configuration.minimumFrameInterval = CMTime(value: 1, timescale: 60)
-        configuration.pixelFormat = kCVPixelFormatType_32BGRA
-        configuration.queueDepth = 3
-        configuration.showsCursor = true
-        configuration.capturesAudio = false
+        let configuration = makeConfiguration(displayMode: displayMode)
 
         let filter = SCContentFilter(display: display, excludingWindows: [])
         let stream = SCStream(
@@ -92,6 +84,7 @@ public final class ScreenCaptureCoordinator:
             }
             try await stream.startCapture()
             self.stream = stream
+            configuredPixelSize = pixelSize(of: displayMode)
         } catch {
             try? stream.removeStreamOutput(self, type: .screen)
             throw error
@@ -108,6 +101,7 @@ public final class ScreenCaptureCoordinator:
         }
         defer {
             self.stream = nil
+            configuredPixelSize = nil
             stateLock.withLock {
                 isStopping = false
             }
@@ -124,11 +118,33 @@ public final class ScreenCaptureCoordinator:
         try stopResult.get()
     }
 
+    @discardableResult
+    public func updateConfiguration(
+        displayID: CGDirectDisplayID
+    ) async throws -> Bool {
+        guard let stream else {
+            return false
+        }
+
+        let displayMode = try await waitForDisplayMode(displayID: displayID)
+        let pixelSize = pixelSize(of: displayMode)
+        guard pixelSize != configuredPixelSize else {
+            return false
+        }
+
+        try await stream.updateConfiguration(
+            makeConfiguration(displayMode: displayMode)
+        )
+        configuredPixelSize = pixelSize
+        return true
+    }
+
     public func invalidate() {
         stateLock.withLock {
             isStopping = true
         }
         stream = nil
+        configuredPixelSize = nil
     }
 
     public func stream(
@@ -164,6 +180,52 @@ public final class ScreenCaptureCoordinator:
 
     private func requestScreenCaptureAccessIfNeeded() -> Bool {
         CGPreflightScreenCaptureAccess() || CGRequestScreenCaptureAccess()
+    }
+
+    private func makeConfiguration(
+        displayMode: CGDisplayMode
+    ) -> SCStreamConfiguration {
+        let configuration = SCStreamConfiguration()
+        configuration.width = displayMode.pixelWidth
+        configuration.height = displayMode.pixelHeight
+        let hostMaximumFramesPerSecond = max(
+            NSScreen.main?.maximumFramesPerSecond ?? 60,
+            1
+        )
+        configuration.minimumFrameInterval = CMTime(
+            value: 1,
+            timescale: Int32(hostMaximumFramesPerSecond)
+        )
+        configuration.pixelFormat = kCVPixelFormatType_32BGRA
+        configuration.queueDepth = 2
+        configuration.showsCursor = true
+        configuration.capturesAudio = false
+        return configuration
+    }
+
+    private func pixelSize(of displayMode: CGDisplayMode) -> CGSize {
+        CGSize(
+            width: displayMode.pixelWidth,
+            height: displayMode.pixelHeight
+        )
+    }
+
+    private func waitForDisplayMode(
+        displayID: CGDirectDisplayID
+    ) async throws -> CGDisplayMode {
+        let timeout = ContinuousClock.now + .seconds(5)
+
+        while ContinuousClock.now < timeout {
+            try Task.checkCancellation()
+
+            if let displayMode = CGDisplayCopyDisplayMode(displayID) {
+                return displayMode
+            }
+
+            try await Task.sleep(for: .milliseconds(50))
+        }
+
+        throw ScreenCaptureCoordinatorError.displayHasNoUsableMode(displayID)
     }
 
     private func findDisplay(

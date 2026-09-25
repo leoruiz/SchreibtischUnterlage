@@ -103,8 +103,13 @@ point on the virtual display without synthesizing an input event. The next
 click, drag, scroll, or keystroke is handled natively by macOS on the virtual
 display. No Accessibility permission is required, and clicks in letterboxed
 preview margins are ignored. The initial preview size adapts to the available
-physical screen, up to 1800 × 1125, while preserving the active
-virtual-display aspect ratio.
+physical screen, using up to 80 percent of its visible width and 90 percent of
+its visible height while preserving the active virtual-display aspect ratio.
+
+When the virtual-display resolution changes in macOS Display Settings, the
+ScreenCaptureKit stream updates to the new pixel dimensions. The preview keeps
+its current width where possible and adjusts its height to the new aspect
+ratio.
 
 ## Attribution
 

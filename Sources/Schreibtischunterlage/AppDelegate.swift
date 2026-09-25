@@ -269,6 +269,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if !violations.isEmpty {
                 lastStatusMessage = "Stopped after physical display change"
                 cancelTransitionOrStopPreview()
+            } else {
+                previewWindowController?.handleDisplayConfigurationChange()
             }
         } catch {
             lastStatusMessage = "Stopped after display monitoring failed"

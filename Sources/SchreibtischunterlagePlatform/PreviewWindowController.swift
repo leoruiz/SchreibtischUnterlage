@@ -22,6 +22,9 @@ public final class PreviewWindowController:
     private let previewView: MetalPreviewView
     private var captureCoordinator: ScreenCaptureCoordinator?
     private var cursorPortal: CursorPortal?
+    private var displayID: CGDirectDisplayID?
+    private var reconfigurationTask: Task<Void, Never>?
+    private var displayConfigurationRevision = 0
     private var isClosingProgrammatically = false
     private var lastFrameSize: CGSize?
     private var hasAppliedInitialWindowSize = false
@@ -59,6 +62,7 @@ public final class PreviewWindowController:
     }
 
     public func start(displayID: CGDirectDisplayID) async throws {
+        self.displayID = displayID
         let cursorPortal = CursorPortal(displayID: displayID)
         self.cursorPortal = cursorPortal
         previewView.cursorPortalHandler = { [weak self] location in
@@ -93,6 +97,9 @@ public final class PreviewWindowController:
             isClosingProgrammatically = false
         }
 
+        reconfigurationTask?.cancel()
+        reconfigurationTask = nil
+        displayID = nil
         let captureCoordinator = captureCoordinator
         self.captureCoordinator = nil
         cursorPortal = nil
@@ -104,12 +111,64 @@ public final class PreviewWindowController:
 
     public func invalidate() {
         isClosingProgrammatically = true
+        reconfigurationTask?.cancel()
+        reconfigurationTask = nil
+        displayID = nil
         captureCoordinator?.invalidate()
         captureCoordinator = nil
         cursorPortal = nil
         previewView.cursorPortalHandler = nil
         window?.orderOut(nil)
         isClosingProgrammatically = false
+    }
+
+    public func handleDisplayConfigurationChange() {
+        guard
+            displayID != nil,
+            captureCoordinator != nil
+        else {
+            return
+        }
+
+        displayConfigurationRevision &+= 1
+        guard reconfigurationTask == nil else {
+            return
+        }
+
+        reconfigurationTask = Task { @MainActor [weak self] in
+            while let self, !Task.isCancelled {
+                let revision = self.displayConfigurationRevision
+
+                do {
+                    try await Task.sleep(for: .milliseconds(100))
+                    try Task.checkCancellation()
+
+                    guard revision == self.displayConfigurationRevision else {
+                        continue
+                    }
+                    guard
+                        let displayID = self.displayID,
+                        let captureCoordinator = self.captureCoordinator
+                    else {
+                        break
+                    }
+
+                    try await captureCoordinator.updateConfiguration(
+                        displayID: displayID
+                    )
+                    guard revision != self.displayConfigurationRevision else {
+                        break
+                    }
+                } catch is CancellationError {
+                    break
+                } catch {
+                    self.failureHandler?(error)
+                    break
+                }
+            }
+
+            self?.reconfigurationTask = nil
+        }
     }
 
     public func windowWillClose(_ notification: Notification) {
@@ -152,17 +211,22 @@ public final class PreviewWindowController:
             return
         }
 
+        let previousFrameSize = lastFrameSize
         lastFrameSize = frameSize
         window?.contentAspectRatio = CGSize(
             width: frameSize.width / frameSize.height,
             height: 1
         )
 
-        guard !hasAppliedInitialWindowSize else {
+        if !hasAppliedInitialWindowSize {
+            hasAppliedInitialWindowSize = true
+            applyInitialWindowSize(sourceSize: frameSize)
             return
         }
-        hasAppliedInitialWindowSize = true
-        applyInitialWindowSize(sourceSize: frameSize)
+
+        if let previousFrameSize, previousFrameSize != frameSize {
+            applyResolutionChangeWindowSize(sourceSize: frameSize)
+        }
     }
 
     private func applyInitialWindowSize(sourceSize: CGSize) {
@@ -184,6 +248,48 @@ public final class PreviewWindowController:
             CGPoint(
                 x: visibleFrame.midX - frame.width / 2,
                 y: visibleFrame.midY - frame.height / 2
+            )
+        )
+    }
+
+    private func applyResolutionChangeWindowSize(sourceSize: CGSize) {
+        guard
+            let window,
+            let screen = window.screen ?? NSScreen.main,
+            let currentContentSize = window.contentView?.bounds.size,
+            let contentSize = PreviewWindowSizing.contentSizePreservingWidth(
+                sourceSize: sourceSize,
+                currentContentSize: currentContentSize,
+                availableSize: CGSize(
+                    width: screen.visibleFrame.width,
+                    height: max(screen.visibleFrame.height - 40, 1)
+                )
+            )
+        else {
+            return
+        }
+
+        let previousCenter = CGPoint(
+            x: window.frame.midX,
+            y: window.frame.midY
+        )
+        window.setContentSize(contentSize)
+
+        let visibleFrame = screen.visibleFrame
+        let proposedOrigin = CGPoint(
+            x: previousCenter.x - window.frame.width / 2,
+            y: previousCenter.y - window.frame.height / 2
+        )
+        window.setFrameOrigin(
+            CGPoint(
+                x: min(
+                    max(proposedOrigin.x, visibleFrame.minX),
+                    visibleFrame.maxX - window.frame.width
+                ),
+                y: min(
+                    max(proposedOrigin.y, visibleFrame.minY),
+                    visibleFrame.maxY - window.frame.height
+                )
             )
         )
     }

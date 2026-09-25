@@ -4,6 +4,12 @@ import Foundation
 import SchreibtischunterlageCore
 
 public struct CGVirtualDisplayFactory: VirtualDisplayCreating {
+    public let hardwareIdentity = VirtualDisplayHardwareIdentity(
+        vendorID: 0x525A,
+        productID: 0x5355,
+        serialNumber: 1
+    )
+
     public init() {}
 
     public func create(
@@ -21,9 +27,9 @@ public struct CGVirtualDisplayFactory: VirtualDisplayCreating {
             maxPixelsWide: UInt32(configuration.maxWidth),
             maxPixelsHigh: UInt32(configuration.maxHeight),
             sizeInMillimeters: CGSize(width: 1600, height: 1000),
-            vendorID: 0x525A,
-            productID: 0x5355,
-            serialNumber: 1,
+            vendorID: hardwareIdentity.vendorID,
+            productID: hardwareIdentity.productID,
+            serialNumber: hardwareIdentity.serialNumber,
             modes: bridgeModes
         )
 

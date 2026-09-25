@@ -6,6 +6,8 @@ public protocol VirtualDisplaySession: AnyObject {
 }
 
 public protocol VirtualDisplayCreating {
+    var hardwareIdentity: VirtualDisplayHardwareIdentity { get }
+
     func create(
         configuration: VirtualDisplayConfiguration
     ) throws -> any VirtualDisplaySession
@@ -13,6 +15,7 @@ public protocol VirtualDisplayCreating {
 
 public enum DisplaySessionControllerError: Error, Equatable, Sendable {
     case noBaselineDisplays
+    case managedDisplayAlreadyOnline(identity: PhysicalDisplayIdentity)
 }
 
 @MainActor
@@ -49,6 +52,13 @@ public final class DisplaySessionController {
             let baselines = try snapshotProvider.snapshots()
             guard !baselines.isEmpty else {
                 throw DisplaySessionControllerError.noBaselineDisplays
+            }
+            if let existingDisplay = baselines.first(
+                where: { displayFactory.hardwareIdentity.matches($0.identity) }
+            ) {
+                throw DisplaySessionControllerError.managedDisplayAlreadyOnline(
+                    identity: existingDisplay.identity
+                )
             }
 
             displayGuard = PhysicalDisplayGuard(baselines: baselines)

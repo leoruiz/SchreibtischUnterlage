@@ -13,6 +13,11 @@ private struct DisplayProbeFailure: Error, CustomStringConvertible {
 final class DisplayProbe: NSObject, NSApplicationDelegate {
     private(set) var exitCode = EXIT_FAILURE
     private var controller: DisplaySessionController?
+    private let cycleCount: Int
+
+    init(cycleCount: Int) {
+        self.cycleCount = cycleCount
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         Task { @MainActor in
@@ -48,38 +53,35 @@ final class DisplayProbe: NSObject, NSApplicationDelegate {
         }
 
         print("baseline displays: \(baseline.count)")
-        try controller.start(
-            configuration: VirtualDisplayModeCatalog.standardConfiguration
-        )
+        print("cycles: \(cycleCount)")
 
-        guard let displayID = controller.activeDisplayID else {
-            throw DisplayProbeFailure(description: "Virtual display has no display ID")
-        }
-        print("virtual display created: id=\(displayID)")
+        for cycle in 1...cycleCount {
+            try controller.start(
+                configuration: VirtualDisplayModeCatalog.standardConfiguration
+            )
 
-        let activeMode = try await Self.waitForDisplayMode(displayID: displayID)
-        print(
-            "virtual display online: "
-                + "\(activeMode.pixelWidth)x\(activeMode.pixelHeight) "
-                + "@\(activeMode.refreshRate)"
-        )
+            guard let displayID = controller.activeDisplayID else {
+                throw DisplayProbeFailure(description: "Virtual display has no display ID")
+            }
 
-        try await Task.sleep(for: .seconds(3))
-        try controller.stop()
-        try await Self.waitForDisplayRemoval(displayID: displayID)
+            let activeMode = try await Self.waitForDisplayMode(displayID: displayID)
+            print(
+                "cycle \(cycle): id=\(displayID) "
+                    + "mode=\(activeMode.pixelWidth)x\(activeMode.pixelHeight) "
+                    + "@\(activeMode.refreshRate)"
+            )
 
-        let finalSnapshots = try snapshotProvider.snapshots()
-        let violations = PhysicalDisplayGuard(baselines: baseline).violations(
-            in: finalSnapshots
-        )
-        guard violations.isEmpty else {
-            throw DisplayProbeFailure(
-                description: "Physical display configuration changed: \(violations)"
+            try await Task.sleep(for: .milliseconds(500))
+            try controller.stop()
+            try await Self.waitForDisplayRemoval(displayID: displayID)
+            try Self.verifyPhysicalDisplays(
+                baseline: baseline,
+                snapshotProvider: snapshotProvider
             )
         }
 
         print("physical displays unchanged: PASS")
-        print("virtual display teardown: PASS")
+        print("virtual display teardown: PASS (\(cycleCount) cycles)")
     }
 
     private static func waitForDisplayMode(
@@ -113,6 +115,21 @@ final class DisplayProbe: NSObject, NSApplicationDelegate {
         throw DisplayProbeFailure(
             description: "Virtual display remained online after Stop"
         )
+    }
+
+    private static func verifyPhysicalDisplays(
+        baseline: [PhysicalDisplaySnapshot],
+        snapshotProvider: any PhysicalDisplaySnapshotProviding
+    ) throws {
+        let finalSnapshots = try snapshotProvider.snapshots()
+        let violations = PhysicalDisplayGuard(baselines: baseline).violations(
+            in: finalSnapshots
+        )
+        guard violations.isEmpty else {
+            throw DisplayProbeFailure(
+                description: "Physical display configuration changed: \(violations)"
+            )
+        }
     }
 
     private static func onlineDisplayIDs() -> [CGDirectDisplayID] {

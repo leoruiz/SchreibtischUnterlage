@@ -6,6 +6,7 @@ enum DisplaySessionControllerTests {
     static func run() throws {
         try startsAndStopsOneDisplay()
         try refusesToStartWithoutBaselineDisplays()
+        try refusesDuplicateManagedDisplay()
         try stopsWhenProtectedDisplayChanges()
         try ignoresAdditionalDisplays()
     }
@@ -41,6 +42,47 @@ enum DisplaySessionControllerTests {
             try expect(
                 controller.state == .failed(.startFailed),
                 "Expected visible start failure"
+            )
+        }
+    }
+
+    private static func refusesDuplicateManagedDisplay() throws {
+        let factory = DisplayFactory()
+        let existingDisplay = PhysicalDisplaySnapshot(
+            identity: PhysicalDisplayIdentity(
+                vendorID: factory.hardwareIdentity.vendorID,
+                modelID: factory.hardwareIdentity.productID,
+                serialNumber: factory.hardwareIdentity.serialNumber,
+                unitNumber: 1
+            ),
+            pixelWidth: 2560,
+            pixelHeight: 1600,
+            refreshRate: 60,
+            isMain: false,
+            originX: -2560,
+            originY: 0
+        )
+        let controller = DisplaySessionController(
+            snapshotProvider: SnapshotProvider(snapshots: [
+                makePhysicalDisplay(),
+                existingDisplay,
+            ]),
+            displayFactory: factory
+        )
+
+        do {
+            try controller.start(
+                configuration: VirtualDisplayModeCatalog.standardConfiguration
+            )
+            throw ControllerTestFailure(description: "Expected duplicate start to fail")
+        } catch DisplaySessionControllerError.managedDisplayAlreadyOnline(let identity) {
+            try expect(
+                identity == existingDisplay.identity,
+                "Expected duplicate identity in error"
+            )
+            try expect(
+                factory.sessions.isEmpty,
+                "Expected no second virtual display creation"
             )
         }
     }
@@ -133,6 +175,11 @@ private final class SnapshotProvider: PhysicalDisplaySnapshotProviding, @uncheck
 }
 
 private final class DisplayFactory: VirtualDisplayCreating {
+    let hardwareIdentity = VirtualDisplayHardwareIdentity(
+        vendorID: 10,
+        productID: 20,
+        serialNumber: 30
+    )
     private(set) var sessions: [DisplaySession] = []
 
     func create(

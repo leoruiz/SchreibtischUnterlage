@@ -24,6 +24,24 @@ public struct VirtualDisplayMode: Equatable, Hashable, Sendable {
     }
 }
 
+public struct VirtualDisplayHardwareIdentity: Equatable, Sendable {
+    public let vendorID: UInt32
+    public let productID: UInt32
+    public let serialNumber: UInt32
+
+    public init(vendorID: UInt32, productID: UInt32, serialNumber: UInt32) {
+        self.vendorID = vendorID
+        self.productID = productID
+        self.serialNumber = serialNumber
+    }
+
+    public func matches(_ identity: PhysicalDisplayIdentity) -> Bool {
+        identity.vendorID == vendorID
+            && identity.modelID == productID
+            && identity.serialNumber == serialNumber
+    }
+}
+
 public struct VirtualDisplayConfiguration: Equatable, Sendable {
     public let preferredMode: VirtualDisplayMode
     public let modes: [VirtualDisplayMode]

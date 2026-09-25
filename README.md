@@ -50,6 +50,16 @@ It creates a virtual display for three seconds, releases it, then verifies that
 the baseline displays are unchanged and the virtual display is no longer
 online.
 
+For repeated lifecycle validation:
+
+```sh
+.build/Schreibtischunterlage.app/Contents/MacOS/Schreibtischunterlage \
+  --display-probe-cycles=10
+```
+
+The app refuses to create a second managed display if its vendor, product, and
+serial identity is already online.
+
 The initial resolution catalog includes common 16:9, 16:10, and ultrawide
 modes from 1280 × 720 through 5120 × 1440. The complete catalog is advertised
 to macOS, so resolution changes happen through Display Settings just like a

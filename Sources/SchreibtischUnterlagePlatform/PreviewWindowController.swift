@@ -1,6 +1,6 @@
 @preconcurrency import AppKit
 import CoreGraphics
-import SchreibtischunterlageCore
+import SchreibtischUnterlageCore
 
 @MainActor
 public final class PreviewWindowController:
@@ -10,6 +10,8 @@ public final class PreviewWindowController:
     public var closeHandler: (@MainActor @Sendable () -> Void)?
     public var failureHandler: (@MainActor @Sendable (Error) -> Void)?
     public var interactionFailureHandler: (@MainActor @Sendable (Error) -> Void)?
+    public var sourceSizeChangeHandler:
+        (@MainActor @Sendable (CGSize) -> Void)?
     public private(set) var renderedFrameCount = 0
     public var previewContentSize: CGSize {
         previewView.bounds.size
@@ -70,7 +72,7 @@ public final class PreviewWindowController:
         contentViewController.view = previewView
 
         let window = NSWindow(contentViewController: contentViewController)
-        window.title = "Schreibtischunterlage"
+        window.title = "SchreibtischUnterlage"
         window.styleMask = [
             .titled,
             .closable,
@@ -339,6 +341,7 @@ public final class PreviewWindowController:
 
         let previousFrameSize = lastFrameSize
         lastFrameSize = frameSize
+        sourceSizeChangeHandler?(frameSize)
         window?.contentAspectRatio = CGSize(
             width: frameSize.width / frameSize.height,
             height: 1

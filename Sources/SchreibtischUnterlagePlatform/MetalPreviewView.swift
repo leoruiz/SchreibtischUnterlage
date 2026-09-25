@@ -2,7 +2,7 @@
 @preconcurrency import CoreVideo
 import Metal
 import QuartzCore
-import SchreibtischunterlageCore
+import SchreibtischUnterlageCore
 
 public enum MetalPreviewViewError: Error, LocalizedError {
     case metalUnavailable

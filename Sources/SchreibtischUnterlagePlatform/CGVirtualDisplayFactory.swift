@@ -1,7 +1,7 @@
 import CGVirtualDisplayBridge
 import CoreGraphics
 import Foundation
-import SchreibtischunterlageCore
+import SchreibtischUnterlageCore
 
 public struct CGVirtualDisplayFactory: VirtualDisplayCreating {
     public let hardwareIdentity = VirtualDisplayHardwareIdentity(
@@ -23,7 +23,7 @@ public struct CGVirtualDisplayFactory: VirtualDisplayCreating {
             )
         }
         let session = try STUVirtualDisplaySession(
-            name: "Schreibtischunterlage Display",
+            name: "SchreibtischUnterlage Display",
             maxPixelsWide: UInt32(configuration.maxWidth),
             maxPixelsHigh: UInt32(configuration.maxHeight),
             sizeInMillimeters: CGSize(width: 1600, height: 1000),

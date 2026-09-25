@@ -2,8 +2,8 @@ import AppKit
 import CoreGraphics
 import Darwin
 import Foundation
-import SchreibtischunterlageCore
-import SchreibtischunterlagePlatform
+import SchreibtischUnterlageCore
+import SchreibtischUnterlagePlatform
 
 private struct DisplayProbeFailure: Error, CustomStringConvertible {
     let description: String
@@ -56,17 +56,34 @@ final class DisplayProbe: NSObject, NSApplicationDelegate {
         print("cycles: \(cycleCount)")
 
         for cycle in 1...cycleCount {
+            let preferredMode = VirtualDisplayModeCatalog.preferredMode(
+                persistedMode: nil,
+                physicalDisplays: baseline
+            )
+            guard let configuration = VirtualDisplayModeCatalog.configuration(
+                preferredMode: preferredMode
+            ) else {
+                throw DisplayProbeFailure(
+                    description: "Could not create the adaptive display configuration"
+                )
+            }
             try controller.start(
-                configuration: VirtualDisplayModeCatalog.standardConfiguration
+                configuration: configuration
             )
 
             guard let displayID = controller.activeDisplayID else {
                 throw DisplayProbeFailure(description: "Virtual display has no display ID")
             }
+            let appliedMode = try await VirtualDisplayModeController.apply(
+                configuration.preferredMode,
+                to: displayID
+            )
 
             let activeMode = try await Self.waitForDisplayMode(displayID: displayID)
             print(
                 "cycle \(cycle): id=\(displayID) "
+                    + "requested=\(preferredMode.width)x\(preferredMode.height) "
+                    + "applied=\(appliedMode.width)x\(appliedMode.height) "
                     + "mode=\(activeMode.pixelWidth)x\(activeMode.pixelHeight) "
                     + "@\(activeMode.refreshRate)"
             )

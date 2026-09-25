@@ -1,4 +1,4 @@
-@testable import SchreibtischunterlageCore
+@testable import SchreibtischUnterlageCore
 
 enum PreviewMetricDistributionTests {
     static func run() throws {

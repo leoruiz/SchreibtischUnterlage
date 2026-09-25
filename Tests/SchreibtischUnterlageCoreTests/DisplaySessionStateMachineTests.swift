@@ -1,11 +1,11 @@
 import XCTest
-@testable import SchreibtischunterlageCore
+@testable import SchreibtischUnterlageCore
 
 private struct TestFailure: Error, CustomStringConvertible {
     let description: String
 }
 
-final class SchreibtischunterlageCoreTests: XCTestCase {
+final class SchreibtischUnterlageCoreTests: XCTestCase {
     func testDisplaySessionStateMachine() throws {
         try DisplaySessionStateMachineTests.run()
     }

@@ -1,5 +1,5 @@
 import Foundation
-import SchreibtischunterlageCore
+import SchreibtischUnterlageCore
 
 public struct PreviewLatencySnapshot: Sendable {
     public let capturedFrameCount: Int

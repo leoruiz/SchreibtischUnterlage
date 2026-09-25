@@ -1,6 +1,6 @@
 @preconcurrency import CoreGraphics
 import Foundation
-import SchreibtischunterlageCore
+import SchreibtischUnterlageCore
 
 public enum CursorPortalError: Error, LocalizedError, Sendable {
     case cursorMoveFailed(CGError)

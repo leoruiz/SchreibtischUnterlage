@@ -45,7 +45,7 @@
 
 @end
 
-NSErrorDomain const STUVirtualDisplayErrorDomain = @"app.ruiz.Schreibtischunterlage.VirtualDisplay";
+NSErrorDomain const STUVirtualDisplayErrorDomain = @"app.ruiz.SchreibtischUnterlage.VirtualDisplay";
 
 @implementation STUVirtualDisplayMode
 

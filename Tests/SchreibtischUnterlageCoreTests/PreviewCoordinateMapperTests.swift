@@ -1,5 +1,5 @@
 import CoreGraphics
-@testable import SchreibtischunterlageCore
+@testable import SchreibtischUnterlageCore
 
 enum PreviewCoordinateMapperTests {
     static func run() throws {

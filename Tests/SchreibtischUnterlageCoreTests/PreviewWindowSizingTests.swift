@@ -1,5 +1,5 @@
 import CoreGraphics
-@testable import SchreibtischunterlageCore
+@testable import SchreibtischUnterlageCore
 
 enum PreviewWindowSizingTests {
     static func run() throws {

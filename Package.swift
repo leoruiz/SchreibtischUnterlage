@@ -3,14 +3,14 @@
 import PackageDescription
 
 let package = Package(
-    name: "Schreibtischunterlage",
+    name: "SchreibtischUnterlage",
     platforms: [
         .macOS(.v15),
     ],
     products: [
         .executable(
-            name: "Schreibtischunterlage",
-            targets: ["Schreibtischunterlage"]
+            name: "SchreibtischUnterlage",
+            targets: ["SchreibtischUnterlage"]
         ),
     ],
     targets: [
@@ -27,16 +27,16 @@ let package = Package(
             ]
         ),
         .target(
-            name: "SchreibtischunterlageCore",
+            name: "SchreibtischUnterlageCore",
             linkerSettings: [
                 .linkedFramework("CoreGraphics"),
             ]
         ),
         .target(
-            name: "SchreibtischunterlagePlatform",
+            name: "SchreibtischUnterlagePlatform",
             dependencies: [
                 "CGVirtualDisplayBridge",
-                "SchreibtischunterlageCore",
+                "SchreibtischUnterlageCore",
             ],
             linkerSettings: [
                 .linkedFramework("AppKit"),
@@ -49,19 +49,19 @@ let package = Package(
             ]
         ),
         .executableTarget(
-            name: "Schreibtischunterlage",
+            name: "SchreibtischUnterlage",
             dependencies: [
-                "SchreibtischunterlageCore",
-                "SchreibtischunterlagePlatform",
+                "SchreibtischUnterlageCore",
+                "SchreibtischUnterlagePlatform",
             ],
             linkerSettings: [
                 .linkedFramework("AppKit"),
             ]
         ),
         .testTarget(
-            name: "SchreibtischunterlageCoreTests",
-            dependencies: ["SchreibtischunterlageCore"],
-            path: "Tests/SchreibtischunterlageCoreTests"
+            name: "SchreibtischUnterlageCoreTests",
+            dependencies: ["SchreibtischUnterlageCore"],
+            path: "Tests/SchreibtischUnterlageCoreTests"
         ),
     ]
 )

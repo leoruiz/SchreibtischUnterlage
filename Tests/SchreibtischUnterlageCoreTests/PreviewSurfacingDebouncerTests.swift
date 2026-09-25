@@ -1,4 +1,4 @@
-@testable import SchreibtischunterlageCore
+@testable import SchreibtischUnterlageCore
 
 enum PreviewSurfacingDebouncerTests {
     static func run() throws {

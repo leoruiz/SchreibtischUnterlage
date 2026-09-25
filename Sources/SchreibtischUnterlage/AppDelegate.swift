@@ -1,7 +1,7 @@
 import AppKit
 import CoreGraphics
-import SchreibtischunterlageCore
-import SchreibtischunterlagePlatform
+import SchreibtischUnterlageCore
+import SchreibtischUnterlagePlatform
 
 private enum PreviewLifecycleError: Error, LocalizedError {
     case missingManagedDisplay
@@ -16,14 +16,27 @@ private enum PreferenceKey {
         "previewAutoSurfacingMode"
     static let cursorPortalActivationMode =
         "cursorPortalActivationMode"
+    static let virtualDisplayModeWidth =
+        "virtualDisplayModeWidth"
+    static let virtualDisplayModeHeight =
+        "virtualDisplayModeHeight"
+
+    static let all = [
+        previewAutoSurfacingMode,
+        cursorPortalActivationMode,
+        virtualDisplayModeWidth,
+        virtualDisplayModeHeight,
+    ]
+}
+
+private enum LegacyProduct {
+    static let bundleIdentifier = "app.ruiz.Schreibtischunterlage"
 }
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private let sessionController = DisplaySessionController(
-        snapshotProvider: CoreGraphicsPhysicalDisplaySnapshotProvider(),
-        displayFactory: CGVirtualDisplayFactory()
-    )
+    private let snapshotProvider: CoreGraphicsPhysicalDisplaySnapshotProvider
+    private let sessionController: DisplaySessionController
 
     private var statusItem: NSStatusItem?
     private var statusMenuItem: NSMenuItem?
@@ -40,7 +53,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var isTransitioning = false
     private var transitionFailure: Error?
 
+    override init() {
+        let snapshotProvider = CoreGraphicsPhysicalDisplaySnapshotProvider()
+        self.snapshotProvider = snapshotProvider
+        sessionController = DisplaySessionController(
+            snapshotProvider: snapshotProvider,
+            displayFactory: CGVirtualDisplayFactory()
+        )
+        super.init()
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
+        migrateLegacyPreferences()
         UserDefaults.standard.register(
             defaults: [
                 PreferenceKey.previewAutoSurfacingMode:
@@ -53,7 +77,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         statusItem.button?.image = NSImage(
             systemSymbolName: "display",
-            accessibilityDescription: "Schreibtischunterlage"
+            accessibilityDescription: "SchreibtischUnterlage"
         )
         statusItem.menu = makeMenu()
         self.statusItem = statusItem
@@ -159,7 +183,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(.separator())
 
         let quitItem = NSMenuItem(
-            title: "Quit Schreibtischunterlage",
+            title: "Quit SchreibtischUnterlage",
             action: #selector(NSApplication.terminate(_:)),
             keyEquivalent: "q"
         )
@@ -250,12 +274,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func startVirtualDisplayAndPreview() async {
         do {
+            let configuration = try initialVirtualDisplayConfiguration()
             try sessionController.start(
-                configuration: VirtualDisplayModeCatalog.standardConfiguration
+                configuration: configuration
             )
             guard let displayID = sessionController.activeDisplayID else {
                 throw PreviewLifecycleError.missingManagedDisplay
             }
+            try await VirtualDisplayModeController.apply(
+                configuration.preferredMode,
+                to: displayID
+            )
 
             let previewWindowController = try PreviewWindowController.make(
                 autoSurfacingMode: previewAutoSurfacingMode,
@@ -272,6 +301,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     title: "Could not enter the virtual display",
                     error: error
                 )
+            }
+            previewWindowController.sourceSizeChangeHandler = { [weak self] size in
+                self?.persistVirtualDisplayMode(sourceSize: size)
             }
             self.previewWindowController = previewWindowController
 
@@ -456,6 +488,81 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return .singleClick
         }
         return mode
+    }
+
+    private func initialVirtualDisplayConfiguration() throws
+        -> VirtualDisplayConfiguration
+    {
+        let preferredMode = VirtualDisplayModeCatalog.preferredMode(
+            persistedMode: persistedVirtualDisplayMode,
+            physicalDisplays: try snapshotProvider.snapshots()
+        )
+
+        return VirtualDisplayModeCatalog.configuration(
+            preferredMode: preferredMode
+        ) ?? VirtualDisplayModeCatalog.fallbackConfiguration
+    }
+
+    private func migrateLegacyPreferences() {
+        guard let legacyDefaults = UserDefaults(
+            suiteName: LegacyProduct.bundleIdentifier
+        ) else {
+            return
+        }
+
+        let defaults = UserDefaults.standard
+        for key in PreferenceKey.all
+            where defaults.object(forKey: key) == nil
+        {
+            guard let value = legacyDefaults.object(forKey: key) else {
+                continue
+            }
+            defaults.set(value, forKey: key)
+        }
+    }
+
+    private var persistedVirtualDisplayMode: VirtualDisplayMode? {
+        let defaults = UserDefaults.standard
+        guard
+            defaults.object(
+                forKey: PreferenceKey.virtualDisplayModeWidth
+            ) != nil,
+            defaults.object(
+                forKey: PreferenceKey.virtualDisplayModeHeight
+            ) != nil
+        else {
+            return nil
+        }
+
+        return VirtualDisplayModeCatalog.mode(
+            width: defaults.integer(
+                forKey: PreferenceKey.virtualDisplayModeWidth
+            ),
+            height: defaults.integer(
+                forKey: PreferenceKey.virtualDisplayModeHeight
+            )
+        )
+    }
+
+    private func persistVirtualDisplayMode(sourceSize: CGSize) {
+        let width = Int(sourceSize.width.rounded())
+        let height = Int(sourceSize.height.rounded())
+        guard VirtualDisplayModeCatalog.mode(
+            width: width,
+            height: height
+        ) != nil else {
+            return
+        }
+
+        let defaults = UserDefaults.standard
+        defaults.set(
+            width,
+            forKey: PreferenceKey.virtualDisplayModeWidth
+        )
+        defaults.set(
+            height,
+            forKey: PreferenceKey.virtualDisplayModeHeight
+        )
     }
 
     private func title(for mode: PreviewAutoSurfacingMode) -> String {

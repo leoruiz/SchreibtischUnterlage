@@ -2,8 +2,8 @@ import AppKit
 import CoreGraphics
 import Darwin
 import Foundation
-import SchreibtischunterlageCore
-import SchreibtischunterlagePlatform
+import SchreibtischUnterlageCore
+import SchreibtischUnterlagePlatform
 
 private struct PreviewProbeFailure: Error, CustomStringConvertible {
     let description: String
@@ -72,12 +72,16 @@ final class PreviewProbe: NSObject, NSApplicationDelegate {
         )
         self.controller = controller
 
-        try controller.start(
-            configuration: VirtualDisplayModeCatalog.standardConfiguration
-        )
+        let configuration =
+            VirtualDisplayModeCatalog.fallbackConfiguration
+        try controller.start(configuration: configuration)
         guard let displayID = controller.activeDisplayID else {
             throw PreviewProbeFailure(description: "Virtual display has no display ID")
         }
+        try await VirtualDisplayModeController.apply(
+            configuration.preferredMode,
+            to: displayID
+        )
 
         let activeMode = try await DisplayProbe.waitForDisplayMode(
             displayID: displayID

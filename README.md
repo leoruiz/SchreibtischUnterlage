@@ -1,8 +1,8 @@
-# Schreibtischunterlage
+# SchreibtischUnterlage
 
 A lightweight Apple Silicon virtual display for screen sharing on macOS.
 
-Schreibtischunterlage is a clean-sheet macOS application inspired by
+SchreibtischUnterlage is a clean-sheet macOS application inspired by
 [DeskPad](https://github.com/Stengo/DeskPad). It creates a guarded virtual
 display and shows its contents in a low-latency Metal preview window.
 
@@ -36,7 +36,7 @@ make app
 The application bundle is written to:
 
 ```text
-.build/Schreibtischunterlage.app
+.build/SchreibtischUnterlage.app
 ```
 
 The manual display probe is intentionally excluded from `make test` because it
@@ -44,7 +44,7 @@ changes the live macOS display configuration. Run it only during attended
 hardware validation:
 
 ```sh
-.build/Schreibtischunterlage.app/Contents/MacOS/Schreibtischunterlage \
+.build/SchreibtischUnterlage.app/Contents/MacOS/SchreibtischUnterlage \
   --display-probe
 ```
 
@@ -55,14 +55,14 @@ online.
 For repeated lifecycle validation:
 
 ```sh
-.build/Schreibtischunterlage.app/Contents/MacOS/Schreibtischunterlage \
+.build/SchreibtischUnterlage.app/Contents/MacOS/SchreibtischUnterlage \
   --display-probe-cycles=10
 ```
 
 For an attended ScreenCaptureKit and Metal preview validation:
 
 ```sh
-.build/Schreibtischunterlage.app/Contents/MacOS/Schreibtischunterlage \
+.build/SchreibtischUnterlage.app/Contents/MacOS/SchreibtischUnterlage \
   --preview-probe-seconds=15
 ```
 
@@ -74,7 +74,7 @@ display cleanup.
 To validate the cursor portal:
 
 ```sh
-.build/Schreibtischunterlage.app/Contents/MacOS/Schreibtischunterlage \
+.build/SchreibtischUnterlage.app/Contents/MacOS/SchreibtischUnterlage \
   --cursor-probe-seconds=10
 ```
 
@@ -85,7 +85,7 @@ location, and then confirms display cleanup.
 To measure the current capture-to-presentation pipeline:
 
 ```sh
-.build/Schreibtischunterlage.app/Contents/MacOS/Schreibtischunterlage \
+.build/SchreibtischUnterlage.app/Contents/MacOS/SchreibtischUnterlage \
   --latency-probe-seconds=20
 ```
 
@@ -105,10 +105,14 @@ The first preview start requests Screen Recording permission. If permission is
 denied, the app destroys the virtual display and offers to open the relevant
 Privacy & Security settings. Start the display again after granting access.
 
-The initial resolution catalog includes common 16:9, 16:10, and ultrawide
-modes from 1280 × 720 through 5120 × 1440. The complete catalog is advertised
-to macOS, so resolution changes happen through Display Settings just like a
-physical monitor. The known-good 2560 × 1600 mode is advertised first.
+The resolution catalog includes common 16:9, 16:10, and ultrawide modes from
+1280 × 720 through 5120 × 1440. The complete catalog is advertised to macOS,
+so resolution changes happen through Display Settings just like a physical
+monitor. The app restores the last selected mode when possible. On first use,
+it chooses the catalog mode that most closely matches the main physical
+display's aspect ratio and pixel dimensions. If macOS filters out the requested
+virtual mode, the app applies the closest mode that Core Graphics publishes.
+With no physical display available, it falls back to 1920 × 1080.
 
 The preview consumes complete ScreenCaptureKit frames only, keeps the newest
 pending frame when capture outruns the UI, and renders IOSurface-backed pixel

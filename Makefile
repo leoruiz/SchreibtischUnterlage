@@ -1,7 +1,7 @@
 .PHONY: build test app clean
 
 build:
-	swift build --arch arm64 --product Schreibtischunterlage
+	swift build --arch arm64 --product SchreibtischUnterlage
 
 test:
 	swift test --arch arm64

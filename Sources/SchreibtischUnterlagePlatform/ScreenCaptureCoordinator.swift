@@ -14,7 +14,7 @@ public enum ScreenCaptureCoordinatorError: Error, LocalizedError, Sendable {
         switch self {
         case .permissionDenied:
             return """
-            Screen Recording permission is required. Enable Schreibtischunterlage in \
+            Screen Recording permission is required. Enable SchreibtischUnterlage in \
             System Settings > Privacy & Security > Screen & System Audio Recording, \
             then start the virtual display again.
             """
@@ -33,7 +33,7 @@ public final class ScreenCaptureCoordinator:
     @unchecked Sendable
 {
     private let outputQueue = DispatchQueue(
-        label: "app.ruiz.Schreibtischunterlage.capture",
+        label: "app.ruiz.SchreibtischUnterlage.capture",
         qos: .userInteractive
     )
     private let relay: NewestFrameRelay

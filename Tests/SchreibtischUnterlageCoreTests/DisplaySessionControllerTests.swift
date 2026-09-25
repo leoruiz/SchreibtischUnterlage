@@ -1,5 +1,5 @@
 import CoreGraphics
-@testable import SchreibtischunterlageCore
+@testable import SchreibtischUnterlageCore
 
 @MainActor
 enum DisplaySessionControllerTests {
@@ -20,7 +20,7 @@ enum DisplaySessionControllerTests {
             displayFactory: factory
         )
 
-        try controller.start(configuration: VirtualDisplayModeCatalog.standardConfiguration)
+        try controller.start(configuration: VirtualDisplayModeCatalog.fallbackConfiguration)
         try expect(controller.state == .active, "Expected active session")
         try expect(factory.sessions.count == 1, "Expected one virtual display")
 
@@ -36,7 +36,7 @@ enum DisplaySessionControllerTests {
         )
 
         do {
-            try controller.start(configuration: VirtualDisplayModeCatalog.standardConfiguration)
+            try controller.start(configuration: VirtualDisplayModeCatalog.fallbackConfiguration)
             throw ControllerTestFailure(description: "Expected start to fail")
         } catch DisplaySessionControllerError.noBaselineDisplays {
             try expect(
@@ -72,7 +72,7 @@ enum DisplaySessionControllerTests {
 
         do {
             try controller.start(
-                configuration: VirtualDisplayModeCatalog.standardConfiguration
+                configuration: VirtualDisplayModeCatalog.fallbackConfiguration
             )
             throw ControllerTestFailure(description: "Expected duplicate start to fail")
         } catch DisplaySessionControllerError.managedDisplayAlreadyOnline(let identity) {
@@ -96,7 +96,7 @@ enum DisplaySessionControllerTests {
             displayFactory: factory
         )
 
-        try controller.start(configuration: VirtualDisplayModeCatalog.standardConfiguration)
+        try controller.start(configuration: VirtualDisplayModeCatalog.fallbackConfiguration)
         provider.currentSnapshots = [
             makePhysicalDisplay(pixelWidth: 5120, pixelHeight: 1440),
         ]
@@ -117,7 +117,7 @@ enum DisplaySessionControllerTests {
             displayFactory: factory
         )
 
-        try controller.start(configuration: VirtualDisplayModeCatalog.standardConfiguration)
+        try controller.start(configuration: VirtualDisplayModeCatalog.fallbackConfiguration)
         provider.currentSnapshots = [
             baseline,
             makePhysicalDisplay(unitNumber: 2, isMain: false, originX: 7680),

@@ -17,6 +17,7 @@ enum DisplaySessionStateMachineTests {
         try AspectFitViewportTests.run()
         try PreviewCoordinateMapperTests.run()
         try PreviewWindowSizingTests.run()
+        try PreviewMetricDistributionTests.run()
 
         print("SchreibtischunterlageCoreTests: PASS")
     }

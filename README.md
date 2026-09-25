@@ -82,6 +82,22 @@ This probe maps the preview center to the virtual display, moves the cursor
 there without generating an event, verifies the resulting global cursor
 location, and then confirms display cleanup.
 
+To measure the current capture-to-presentation pipeline:
+
+```sh
+.build/Schreibtischunterlage.app/Contents/MacOS/Schreibtischunterlage \
+  --latency-probe-seconds=20
+```
+
+The latency probe sweeps the cursor across the virtual display to produce a
+repeatable stream of changed frames. It reports frame counts, coalescing and
+drop counts, effective presentation rate, and p50/p95/p99 timing for capture,
+main-thread delivery, Metal submission, GPU execution, drawable presentation,
+and WindowServer display-time deltas. A negative display-time delta means the
+captured surface reached the callback or preview before the virtual display's
+scheduled scanout. The original cursor position is restored before display
+teardown.
+
 The app refuses to create a second managed display if its vendor, product, and
 serial identity is already online.
 

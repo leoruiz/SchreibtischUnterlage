@@ -10,19 +10,21 @@ final class NewestFrameRelay: @unchecked Sendable {
         self.delivery = delivery
     }
 
-    func submit(_ frame: CapturedFrame) {
-        let shouldScheduleDelivery = lock.withLock {
+    @discardableResult
+    func submit(_ frame: CapturedFrame) -> CapturedFrame? {
+        let result = lock.withLock {
+            let replacedPendingFrame = latestFrame
             latestFrame = frame
             guard !deliveryScheduled else {
-                return false
+                return (false, replacedPendingFrame)
             }
 
             deliveryScheduled = true
-            return true
+            return (true, replacedPendingFrame)
         }
 
-        guard shouldScheduleDelivery else {
-            return
+        guard result.0 else {
+            return result.1
         }
 
         DispatchQueue.main.async { [weak self] in
@@ -30,6 +32,7 @@ final class NewestFrameRelay: @unchecked Sendable {
                 self?.deliverLatestFrame()
             }
         }
+        return result.1
     }
 
     @MainActor

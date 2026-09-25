@@ -19,7 +19,16 @@ public final class PreviewWindowController:
         lastFrameSize
     }
 
+    public var latencySnapshot: PreviewLatencySnapshot? {
+        latencyTracker?.snapshot()
+    }
+
+    public func resetLatencyMeasurements() {
+        latencyTracker?.reset()
+    }
+
     private let previewView: MetalPreviewView
+    private let latencyTracker: PreviewLatencyTracker?
     private var captureCoordinator: ScreenCaptureCoordinator?
     private var cursorPortal: CursorPortal?
     private var displayID: CGDirectDisplayID?
@@ -29,12 +38,24 @@ public final class PreviewWindowController:
     private var lastFrameSize: CGSize?
     private var hasAppliedInitialWindowSize = false
 
-    public static func make() throws -> PreviewWindowController {
-        PreviewWindowController(previewView: try MetalPreviewView.make())
+    public static func make(
+        measuresLatency: Bool = false
+    ) throws -> PreviewWindowController {
+        let latencyTracker = measuresLatency ? PreviewLatencyTracker() : nil
+        return try PreviewWindowController(
+            previewView: MetalPreviewView.make(
+                latencyTracker: latencyTracker
+            ),
+            latencyTracker: latencyTracker
+        )
     }
 
-    private init(previewView: MetalPreviewView) {
+    private init(
+        previewView: MetalPreviewView,
+        latencyTracker: PreviewLatencyTracker?
+    ) {
         self.previewView = previewView
+        self.latencyTracker = latencyTracker
 
         let contentViewController = NSViewController()
         contentViewController.view = previewView
@@ -75,7 +96,8 @@ public final class PreviewWindowController:
             },
             failureHandler: { [weak self] error in
                 self?.failureHandler?(error)
-            }
+            },
+            latencyTracker: latencyTracker
         )
         captureCoordinator = coordinator
 
@@ -179,6 +201,10 @@ public final class PreviewWindowController:
     }
 
     private func display(_ frame: CapturedFrame) {
+        latencyTracker?.recordDeliveredFrame(
+            frame,
+            at: HostTimeClock.now
+        )
         updateWindowAspectRatioIfNeeded(
             CGSize(width: frame.width, height: frame.height)
         )

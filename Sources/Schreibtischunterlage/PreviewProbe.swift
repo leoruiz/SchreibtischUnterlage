@@ -15,16 +15,19 @@ final class PreviewProbe: NSObject, NSApplicationDelegate {
 
     private let visibleDuration: Duration
     private let testsCursorPortal: Bool
+    private let measuresLatency: Bool
     private var controller: DisplaySessionController?
     private var previewWindowController: PreviewWindowController?
     private var captureFailure: Error?
 
     init(
         visibleDuration: Duration,
-        testsCursorPortal: Bool = false
+        testsCursorPortal: Bool = false,
+        measuresLatency: Bool = false
     ) {
         self.visibleDuration = visibleDuration
         self.testsCursorPortal = testsCursorPortal
+        self.measuresLatency = measuresLatency
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -85,7 +88,9 @@ final class PreviewProbe: NSObject, NSApplicationDelegate {
                 + "@\(activeMode.refreshRate)"
         )
 
-        let previewWindowController = try PreviewWindowController.make()
+        let previewWindowController = try PreviewWindowController.make(
+            measuresLatency: measuresLatency
+        )
         previewWindowController.failureHandler = { [weak self] error in
             self?.captureFailure = error
         }
@@ -104,7 +109,17 @@ final class PreviewProbe: NSObject, NSApplicationDelegate {
             print("preview cursor portal: PASS")
         }
 
-        try await Task.sleep(for: visibleDuration)
+        if measuresLatency {
+            try await Task.sleep(for: .milliseconds(250))
+            previewWindowController.resetLatencyMeasurements()
+            try await runLatencyWorkload(displayID: displayID)
+            try await Task.sleep(for: .milliseconds(500))
+            try printLatencyReport(
+                previewWindowController.latencySnapshot
+            )
+        } else {
+            try await Task.sleep(for: visibleDuration)
+        }
         if let captureFailure {
             throw captureFailure
         }
@@ -200,6 +215,176 @@ final class PreviewProbe: NSObject, NSApplicationDelegate {
 
         throw PreviewProbeFailure(
             description: "No capture frame reached Metal within 10 seconds"
+        )
+    }
+
+    private func runLatencyWorkload(
+        displayID: CGDirectDisplayID
+    ) async throws {
+        guard let originalCursorLocation = CGEvent(source: nil)?.location else {
+            throw PreviewProbeFailure(
+                description: "Could not read the original cursor location"
+            )
+        }
+        defer {
+            restoreCursor(to: originalCursorLocation)
+        }
+
+        let displayBounds = CGDisplayBounds(displayID)
+        guard displayBounds.width > 0, displayBounds.height > 0 else {
+            throw PreviewProbeFailure(
+                description: "Virtual display has invalid cursor bounds"
+            )
+        }
+
+        let margin = max(
+            min(displayBounds.width, displayBounds.height) * 0.05,
+            24
+        )
+        let horizontalRange = max(displayBounds.width - margin * 2, 1)
+        let verticalAmplitude = max(displayBounds.height * 0.25, 1)
+        let deadline = ContinuousClock.now.advanced(by: visibleDuration)
+        var step = 0
+
+        while ContinuousClock.now < deadline {
+            if let captureFailure {
+                throw captureFailure
+            }
+
+            let phase = CGFloat(step % 240) / 239
+            let sweep = (step / 240).isMultiple(of: 2)
+                ? phase
+                : 1 - phase
+            let point = CGPoint(
+                x: margin + horizontalRange * sweep,
+                y: displayBounds.height / 2
+                    + CGFloat(sin(Double(step) * 0.08)) * verticalAmplitude
+            )
+            let result = CGDisplayMoveCursorToPoint(displayID, point)
+            guard result == .success else {
+                throw PreviewProbeFailure(
+                    description: "Cursor workload failed with \(result)"
+                )
+            }
+
+            step += 1
+            try await Task.sleep(for: .milliseconds(8))
+        }
+    }
+
+    private func restoreCursor(to globalPoint: CGPoint) {
+        var displayID = CGDirectDisplayID()
+        var displayCount: UInt32 = 0
+        guard
+            CGGetDisplaysWithPoint(
+                globalPoint,
+                1,
+                &displayID,
+                &displayCount
+            ) == .success,
+            displayCount > 0
+        else {
+            return
+        }
+
+        let bounds = CGDisplayBounds(displayID)
+        _ = CGDisplayMoveCursorToPoint(
+            displayID,
+            CGPoint(
+                x: globalPoint.x - bounds.minX,
+                y: globalPoint.y - bounds.minY
+            )
+        )
+    }
+
+    private func printLatencyReport(
+        _ snapshot: PreviewLatencySnapshot?
+    ) throws {
+        guard let snapshot else {
+            throw PreviewProbeFailure(
+                description: "Latency measurement was not enabled"
+            )
+        }
+        guard snapshot.presentedFrameCount >= 10 else {
+            throw PreviewProbeFailure(
+                description: """
+                Only \(snapshot.presentedFrameCount) frames were presented; \
+                at least 10 are required
+                """
+            )
+        }
+
+        print(
+            "latency frames: captured=\(snapshot.capturedFrameCount) "
+                + "coalesced=\(snapshot.coalescedFrameCount) "
+                + "delivered=\(snapshot.deliveredFrameCount) "
+                + "submitted=\(snapshot.submittedFrameCount) "
+                + "render-dropped=\(snapshot.renderDropCount) "
+                + "presented=\(snapshot.presentedFrameCount) "
+                + "presentation-dropped=\(snapshot.presentationDropCount)"
+        )
+        printDistribution(
+            "WindowServer displayTime -> capture",
+            snapshot.sourceToCapture
+        )
+        printDistribution(
+            "capture -> main",
+            snapshot.captureToDelivery
+        )
+        printDistribution(
+            "capture -> submit",
+            snapshot.captureToSubmit
+        )
+        printDistribution(
+            "GPU execution",
+            snapshot.gpuExecution
+        )
+        printDistribution(
+            "submit -> present",
+            snapshot.submitToPresentation
+        )
+        printDistribution(
+            "capture -> present",
+            snapshot.captureToPresentation
+        )
+        printDistribution(
+            "WindowServer displayTime -> present",
+            snapshot.sourceToPresentation
+        )
+        printDistribution(
+            "presentation interval",
+            snapshot.presentationInterval
+        )
+
+        if let framesPerSecond = snapshot.effectiveFramesPerSecond {
+            print(
+                "effective presentation rate: "
+                    + String(format: "%.2f fps", framesPerSecond)
+            )
+        }
+    }
+
+    private func printDistribution(
+        _ label: String,
+        _ distribution: PreviewMetricDistribution?
+    ) {
+        guard let distribution else {
+            print("\(label): unavailable")
+            return
+        }
+
+        print(
+            "\(label): n=\(distribution.sampleCount) "
+                + String(
+                    format: "min=%.3f avg=%.3f p50=%.3f p95=%.3f "
+                        + "p99=%.3f max=%.3f ms",
+                    distribution.minimum,
+                    distribution.average,
+                    distribution.p50,
+                    distribution.p95,
+                    distribution.p99,
+                    distribution.maximum
+                )
         )
     }
 }

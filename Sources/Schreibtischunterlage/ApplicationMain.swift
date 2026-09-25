@@ -28,6 +28,18 @@ enum ApplicationMain {
             exit(probe.exitCode)
         }
 
+        if let latencyProbeDuration = latencyProbeDuration() {
+            let probe = PreviewProbe(
+                visibleDuration: latencyProbeDuration,
+                measuresLatency: true
+            )
+            application.setActivationPolicy(.accessory)
+            application.delegate = probe
+            application.run()
+            withExtendedLifetime(probe) {}
+            exit(probe.exitCode)
+        }
+
         if let previewProbeDuration = previewProbeDuration() {
             let probe = PreviewProbe(visibleDuration: previewProbeDuration)
             application.setActivationPolicy(.accessory)
@@ -82,6 +94,13 @@ enum ApplicationMain {
         probeDuration(
             prefix: "--cursor-probe-seconds=",
             errorLabel: "cursor probe"
+        )
+    }
+
+    private static func latencyProbeDuration() -> Duration? {
+        probeDuration(
+            prefix: "--latency-probe-seconds=",
+            errorLabel: "latency probe"
         )
     }
 

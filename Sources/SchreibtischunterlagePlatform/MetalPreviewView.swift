@@ -82,17 +82,30 @@ public final class MetalPreviewView: NSView {
     private let pipelineState: MTLRenderPipelineState
     private let samplerState: MTLSamplerState
     private let textureCache: CVMetalTextureCache
+    private let latencyTracker: PreviewLatencyTracker?
     private var pendingClickLocation: CGPoint?
 
     public static func make() throws -> MetalPreviewView {
+        try make(latencyTracker: nil)
+    }
+
+    static func make(
+        latencyTracker: PreviewLatencyTracker?
+    ) throws -> MetalPreviewView {
         guard let device = MTLCreateSystemDefaultDevice() else {
             throw MetalPreviewViewError.metalUnavailable
         }
 
-        return try MetalPreviewView(device: device)
+        return try MetalPreviewView(
+            device: device,
+            latencyTracker: latencyTracker
+        )
     }
 
-    private init(device: MTLDevice) throws {
+    private init(
+        device: MTLDevice,
+        latencyTracker: PreviewLatencyTracker?
+    ) throws {
         guard let commandQueue = device.makeCommandQueue() else {
             throw MetalPreviewViewError.commandQueueUnavailable
         }
@@ -149,6 +162,7 @@ public final class MetalPreviewView: NSView {
         self.pipelineState = pipelineState
         self.samplerState = samplerState
         self.textureCache = textureCache
+        self.latencyTracker = latencyTracker
 
         super.init(frame: .zero)
 
@@ -209,7 +223,13 @@ public final class MetalPreviewView: NSView {
             sourceWidth > 0,
             sourceHeight > 0,
             drawableSize.width > 0,
-            drawableSize.height > 0,
+            drawableSize.height > 0
+        else {
+            latencyTracker?.recordRenderDrop(frame)
+            return false
+        }
+
+        guard
             let drawable = metalLayer.nextDrawable(),
             let commandBuffer = commandQueue.makeCommandBuffer(),
             let texture = makeTexture(
@@ -224,6 +244,7 @@ public final class MetalPreviewView: NSView {
                 destinationHeight: drawableSize.height
             )
         else {
+            latencyTracker?.recordRenderDrop(frame)
             return false
         }
 
@@ -241,6 +262,7 @@ public final class MetalPreviewView: NSView {
         guard let encoder = commandBuffer.makeRenderCommandEncoder(
             descriptor: renderPassDescriptor
         ) else {
+            latencyTracker?.recordRenderDrop(frame)
             return false
         }
 
@@ -260,7 +282,24 @@ public final class MetalPreviewView: NSView {
         encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
         encoder.endEncoding()
 
-        commandBuffer.addCompletedHandler { _ in
+        let submissionTime = HostTimeClock.now
+        latencyTracker?.recordSubmittedFrame(
+            frame,
+            at: submissionTime
+        )
+        drawable.addPresentedHandler { [latencyTracker] drawable in
+            latencyTracker?.recordPresentation(
+                frame: frame,
+                submissionTime: submissionTime,
+                presentationTime: drawable.presentedTime
+            )
+        }
+        commandBuffer.addCompletedHandler { [latencyTracker] commandBuffer in
+            latencyTracker?.recordGPUExecution(
+                frame: frame,
+                startTime: commandBuffer.gpuStartTime,
+                endTime: commandBuffer.gpuEndTime
+            )
             withExtendedLifetime(texture) {}
         }
         commandBuffer.present(drawable)

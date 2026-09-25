@@ -38,18 +38,33 @@ public final class ScreenCaptureCoordinator:
     )
     private let relay: NewestFrameRelay
     private let failureHandler: @MainActor @Sendable (Error) -> Void
+    private let latencyTracker: PreviewLatencyTracker?
     private let stateLock = NSLock()
 
     private var stream: SCStream?
     private var isStopping = false
     private var configuredPixelSize: CGSize?
 
-    public init(
+    public convenience init(
         frameHandler: @escaping @MainActor @Sendable (CapturedFrame) -> Void,
         failureHandler: @escaping @MainActor @Sendable (Error) -> Void
     ) {
+        self.init(
+            frameHandler: frameHandler,
+            failureHandler: failureHandler,
+            latencyTracker: nil
+        )
+    }
+
+    init(
+        frameHandler: @escaping @MainActor @Sendable (CapturedFrame) -> Void,
+        failureHandler: @escaping @MainActor @Sendable (Error) -> Void,
+        latencyTracker: PreviewLatencyTracker?
+    ) {
         relay = NewestFrameRelay(delivery: frameHandler)
         self.failureHandler = failureHandler
+        self.latencyTracker = latencyTracker
+        super.init()
     }
 
     public func start(displayID: CGDirectDisplayID) async throws {
@@ -152,17 +167,28 @@ public final class ScreenCaptureCoordinator:
         didOutputSampleBuffer sampleBuffer: CMSampleBuffer,
         of outputType: SCStreamOutputType
     ) {
+        let captureCallbackTime = HostTimeClock.now
         guard
             outputType == .screen,
             sampleBuffer.isValid,
             CMSampleBufferDataIsReady(sampleBuffer),
-            isCompleteFrame(sampleBuffer),
+            let attachments = frameAttachments(sampleBuffer),
+            isCompleteFrame(attachments),
             let pixelBuffer = sampleBuffer.imageBuffer
         else {
             return
         }
 
-        relay.submit(CapturedFrame(pixelBuffer: pixelBuffer))
+        let frame = CapturedFrame(
+            pixelBuffer: pixelBuffer,
+            sourceDisplayTime: sourceDisplayTime(attachments),
+            captureCallbackTime: captureCallbackTime,
+            latencyGeneration: latencyTracker?.measurementGeneration
+        )
+        latencyTracker?.recordCapturedFrame(frame)
+        if let replacedFrame = relay.submit(frame) {
+            latencyTracker?.recordCoalescedFrame(replacedFrame)
+        }
     }
 
     public func stream(_ stream: SCStream, didStopWithError error: Error) {
@@ -252,18 +278,40 @@ public final class ScreenCaptureCoordinator:
         throw ScreenCaptureCoordinatorError.displayNotFound(displayID)
     }
 
-    private func isCompleteFrame(_ sampleBuffer: CMSampleBuffer) -> Bool {
+    private func frameAttachments(
+        _ sampleBuffer: CMSampleBuffer
+    ) -> [SCStreamFrameInfo: Any]? {
         guard
             let attachments = CMSampleBufferGetSampleAttachmentsArray(
                 sampleBuffer,
                 createIfNecessary: false
-            ) as? [[SCStreamFrameInfo: Any]],
-            let statusRawValue = attachments.first?[.status] as? Int,
+            ) as? [[SCStreamFrameInfo: Any]]
+        else {
+            return nil
+        }
+
+        return attachments.first
+    }
+
+    private func isCompleteFrame(
+        _ attachments: [SCStreamFrameInfo: Any]
+    ) -> Bool {
+        guard
+            let statusRawValue = attachments[.status] as? Int,
             let status = SCFrameStatus(rawValue: statusRawValue)
         else {
             return false
         }
 
         return status == .complete
+    }
+
+    private func sourceDisplayTime(
+        _ attachments: [SCStreamFrameInfo: Any]
+    ) -> CFTimeInterval? {
+        guard let displayTime = attachments[.displayTime] as? UInt64 else {
+            return nil
+        }
+        return HostTimeClock.seconds(fromMachAbsoluteTime: displayTime)
     }
 }

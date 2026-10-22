@@ -133,6 +133,33 @@ The preview consumes complete ScreenCaptureKit frames only, keeps the newest
 pending frame when capture outruns the UI, and renders IOSurface-backed pixel
 buffers directly through Metal with aspect-fit scaling.
 
+## CLI screenshots
+
+With SU's virtual display already running:
+
+```sh
+/Applications/SchreibtischUnterlage.app/Contents/MacOS/SchreibtischUnterlage \
+  --screenshot "$HOME/Desktop/su-capture.png"
+```
+
+Use `.build/SchreibtischUnterlage.app/Contents/MacOS/SchreibtischUnterlage` to
+try a local build instead. `--screenshot=/path/to/capture.png` is also accepted;
+`--help` prints usage without launching the menu-bar app.
+
+The command captures only the display matching SU's managed hardware identity,
+at its current native pixel resolution, including the pointer when present.
+It never falls back to a physical display, starts or stops a display, raises a
+window, or moves the pointer. It requires existing Screen Recording permission
+and does not request permission interactively; grant access through the app
+first. It does not need Accessibility permission.
+
+The destination must end in `.png`, its parent directory must already exist,
+and existing files are never overwritten. Success prints one JSON object with
+`path`, `displayID`, `width`, and `height` to stdout. Errors go to stderr and
+return a nonzero exit status.
+
+## Pointer and preview behavior
+
 Clicking visible preview content moves the macOS cursor to the corresponding
 point on the virtual display without synthesizing an input event. The next
 click, drag, scroll, or keystroke is handled natively by macOS on the virtual

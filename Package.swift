@@ -43,9 +43,11 @@ let package = Package(
                 .linkedFramework("CoreMedia"),
                 .linkedFramework("CoreGraphics"),
                 .linkedFramework("CoreVideo"),
+                .linkedFramework("ImageIO"),
                 .linkedFramework("Metal"),
                 .linkedFramework("QuartzCore"),
                 .linkedFramework("ScreenCaptureKit"),
+                .linkedFramework("UniformTypeIdentifiers"),
             ]
         ),
         .executableTarget(
@@ -62,6 +64,10 @@ let package = Package(
             name: "SchreibtischUnterlageCoreTests",
             dependencies: ["SchreibtischUnterlageCore"],
             path: "Tests/SchreibtischUnterlageCoreTests"
+        ),
+        .testTarget(
+            name: "SchreibtischUnterlagePlatformTests",
+            dependencies: ["SchreibtischUnterlagePlatform"]
         ),
     ]
 )

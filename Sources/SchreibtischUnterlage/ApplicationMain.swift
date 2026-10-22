@@ -1,10 +1,38 @@
 import AppKit
 import Darwin
+import SchreibtischUnterlageCore
+import SchreibtischUnterlagePlatform
 
 @main
 enum ApplicationMain {
     @MainActor
-    static func main() {
+    static func main() async {
+        do {
+            if let command = try ScreenshotCommand.parse(
+                Array(CommandLine.arguments.dropFirst())
+            ) {
+                switch command {
+                case .help:
+                    print(ScreenshotCommand.usage)
+                case let .capture(path):
+                    let result = try await ManagedDisplayScreenshot.capture(
+                        to: URL(fileURLWithPath: path).standardizedFileURL
+                    )
+                    let data = try JSONEncoder().encode(result)
+                    print(String(decoding: data, as: UTF8.self))
+                }
+                return
+            }
+        } catch {
+            fputs("screenshot: \(error.localizedDescription)\n", stderr)
+            exit(EXIT_FAILURE)
+        }
+
+        runApplication()
+    }
+
+    @MainActor
+    private static func runApplication() {
         let application = NSApplication.shared
 
         if let probeCycleCount = displayProbeCycleCount() {
